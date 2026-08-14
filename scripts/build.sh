@@ -138,6 +138,20 @@ CCACHE="$(command -v ccache || true)"
 if [ -n "$CCACHE" ]; then
     export CCACHE_DIR="$WORK/ccache"
     export CCACHE_MAXSIZE=3G
+    # Without these the hit rate on a CI runner is far lower than it looks:
+    #   BASEDIR      the tree is re-extracted under an absolute path each run;
+    #                rewriting paths relative to it keeps hashes stable.
+    #   time_macros  Wine compiles files using __DATE__/__TIME__, which ccache
+    #                refuses to cache at all unless told they do not matter.
+    #   file_stat_matches + include_file_mtime/ctime
+    #                a fresh tar gives every file a new mtime, so identical
+    #                content would otherwise miss on metadata alone.
+    #   COMPILERCHECK=content
+    #                the cross compiler lives under $WORK, so its path changes
+    #                meaning; hash what it *is* rather than where it sits.
+    export CCACHE_BASEDIR="$WORK"
+    export CCACHE_SLOPPINESS="time_macros,file_stat_matches,include_file_mtime,include_file_ctime"
+    export CCACHE_COMPILERCHECK=content
     HOST_CC="$CCACHE /usr/bin/clang -arch x86_64"
     HOST_CXX="$CCACHE /usr/bin/clang++ -arch x86_64"
     CROSS_CC="$CCACHE $CROSS_CLANG"
@@ -164,5 +178,12 @@ $ARCH_PREFIX "$SOURCES/wine/configure" \
 
 $ARCH_PREFIX make -j"$JOBS"
 $ARCH_PREFIX make install-lib
+
+# Printed rather than assumed: "the cache should make this fast" was a guess,
+# and the hit rate is the only thing that settles whether it did.
+if [ -n "$CCACHE" ]; then
+    echo "=== ccache statistics ==="
+    "$CCACHE" --show-stats 2>/dev/null || "$CCACHE" -s 2>/dev/null || true
+fi
 
 echo "Build complete: $PREFIX"
