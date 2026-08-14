@@ -54,9 +54,15 @@ if [ ! -d "$WORK/$LLVM_MINGW" ]; then
         "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_VERSION/$LLVM_MINGW.tar.xz"
     tar -xf "$WORK/$LLVM_MINGW.tar.xz" -C "$WORK"
 fi
-export PATH="$WORK/$LLVM_MINGW/bin:$(brew --prefix bison)/bin:$PATH"
-command -v x86_64-w64-mingw32-clang >/dev/null \
-    || { echo "llvm-mingw extraction failed"; exit 1; }
+# llvm-mingw goes at the END of PATH and never the front: it ships a bare
+# `clang` beside its prefixed cross tools, and at the front it shadowed Apple's
+# clang — configure then died on `ld: library 'System' not found`, upstream
+# clang having no macOS SDK default. That one line was runs 2-4's only failure.
+# The compilers are passed by absolute path below so PATH order cannot decide
+# which compiler builds what; PATH only serves the prefixed helper tools.
+export PATH="$(brew --prefix bison)/bin:$PATH:$WORK/$LLVM_MINGW/bin"
+CROSS_CLANG="$WORK/$LLVM_MINGW/bin/x86_64-w64-mingw32-clang"
+[ -x "$CROSS_CLANG" ] || { echo "llvm-mingw extraction failed"; exit 1; }
 
 # The Unix side is x86_64. `arch -x86_64` alone is NOT enough: clang keys its
 # default target off more than the process architecture — verified locally,
@@ -113,8 +119,8 @@ $ARCH_PREFIX "$SOURCES/wine/configure" \
     --with-freetype --with-gnutls \
     --disable-tests \
     --host=x86_64-apple-darwin \
-    CC="clang -arch x86_64" CXX="clang++ -arch x86_64" \
-    CROSSCC="x86_64-w64-mingw32-clang" \
+    CC="/usr/bin/clang -arch x86_64" CXX="/usr/bin/clang++ -arch x86_64" \
+    CROSSCC="$CROSS_CLANG" \
     ${UNIX_CFLAGS:+CFLAGS="$UNIX_CFLAGS"} \
     ${PE_CFLAGS:+CROSSCFLAGS="$PE_CFLAGS"}
 
