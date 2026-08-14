@@ -72,7 +72,14 @@ jobs:
           # One at a time, so a link conflict on someone's dependency does not
           # take the rest down with it — the runner image ships several of
           # these already linked.
-          for formula in gnutls freetype sdl2 pkgconf molten-vk gstreamer libusb; do
+          # zlib is here for its .pc file, not its code. macOS ships the zlib
+          # library but no zlib.pc — not in /usr/lib/pkgconfig (which holds
+          # only apr and pcre) and not in the SDK — so gnutls.pc's
+          # "Requires: zlib" cannot resolve, and gnutls drags GStreamer's
+          # resolution down with it. brew's zlib is keg-only, so it lands in
+          # opt/zlib/lib/pkgconfig where the keg sweep below picks it up and
+          # never shadows the system library at link time.
+          for formula in zlib gnutls freetype sdl2 pkgconf molten-vk gstreamer libusb; do
             arch -x86_64 /usr/local/bin/brew install "$formula" \
               || arch -x86_64 /usr/local/bin/brew link --overwrite "$formula" \
               || echo "::warning::$formula may be incomplete — asserted below"
@@ -119,6 +126,13 @@ jobs:
           export PKG_CONFIG_LIBDIR="$PC_DIRS"
           echo "=== pkg-config resolution ==="
           echo "search dirs: $(echo "$PC_DIRS" | tr ':' '\n' | wc -l)"
+          # Locate the .pc files that have actually gone missing, so a repeat
+          # failure names its own cause instead of costing a run to find.
+          for pc in zlib gnutls gstreamer-1.0; do
+            hit=$(echo "$PC_DIRS" | tr ':' '\n' \
+                  | while read -r d; do [ -e "$d/$pc.pc" ] && echo "$d" && break; done)
+            echo "  $pc.pc: ${hit:-NOT ON THE SEARCH PATH}"
+          done
           for pc in glib-2.0 gnutls gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0; do
             if "$PKGCONF" --print-errors --exists "$pc"; then
               echo "  ok: $pc $("$PKGCONF" --modversion "$pc")"
