@@ -65,7 +65,26 @@ sed -e "s/@VERSION@/$VERSION/" "$ROOT/resources/NOTICE.template" \
 
 # Every Mach-O that can become the game process gets the entitlement. The list
 # mirrors EngineInjectionSupport.loaders() in Sommelier.
+# Wine 11 with new WOW64 builds a single `bin/wine`; CrossOver's tree also
+# ships `wine64` and `wineloader`, and Sommelier's re-signing looks for those
+# names. Provide them as hard links so every consumer finds a loader under the
+# name it expects, and so all three are one inode carrying one signature.
+if [ -f "$BUNDLE/bin/wine" ]; then
+    for alias in wine64 wineloader; do
+        [ -e "$BUNDLE/bin/$alias" ] || ln "$BUNDLE/bin/wine" "$BUNDLE/bin/$alias"
+    done
+fi
+
+# Sign everything else FIRST. The entitled loaders must come last: a blanket
+# `codesign --force` without --entitlements silently strips them, which is
+# exactly what happened on the first green build — the loaders were entitled
+# and then re-signed blank a line later, and the interposer would have been
+# stripped at runtime with no error anywhere.
+find "$BUNDLE" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) \
+    -exec codesign --force --sign "${SIGN_IDENTITY:--}" {} \; 2>/dev/null || true
+
 LOADERS=(
+    "$BUNDLE/bin/wine"
     "$BUNDLE/bin/wine64"
     "$BUNDLE/bin/wineloader"
     "$BUNDLE/lib/wine/x86_64-unix/wine"
@@ -76,9 +95,16 @@ for loader in "${LOADERS[@]}"; do
         --entitlements "$ENTITLEMENTS" \
         --sign "${SIGN_IDENTITY:--}" "$loader"
 done
-# Everything else: plain ad-hoc so Gatekeeper sees a consistent bundle.
-find "$BUNDLE" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) \
-    -exec codesign --force --sign "${SIGN_IDENTITY:--}" {} \; 2>/dev/null || true
+
+# Asserted rather than assumed: without this entitlement dyld strips
+# DYLD_INSERT_LIBRARIES and the interposer never loads, with no error to see.
+for loader in "${LOADERS[@]}"; do
+    [ -f "$loader" ] || continue
+    codesign -d --entitlements - "$loader" 2>/dev/null \
+        | grep -q "allow-dyld-environment-variables" \
+        || { echo "FATAL: $loader lost its entitlement"; exit 1; }
+done
+echo "Entitlements verified on $(ls "$BUNDLE/bin" | tr '\n' ' ')" 
 
 # ---- Release artifacts -----------------------------------------------------
 cd "$WORK"
