@@ -41,7 +41,8 @@ jobs:
       # failure is a useless one-liner.
       - name: Dump config.log on failure
         if: failure()
-        run: tail -80 work/build/config.log || true
+        # The failed compile invocation lives mid-file, not at the tail.
+        run: grep -B4 -A18 -E "failed program was|error:|cannot" work/build/config.log | head -120 || true
 
       # The release IS the compliance mechanism: binaries and their complete
       # corresponding source are attached to the same tag, so neither can be

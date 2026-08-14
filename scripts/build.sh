@@ -58,7 +58,12 @@ export PATH="$WORK/$LLVM_MINGW/bin:$(brew --prefix bison)/bin:$PATH"
 command -v x86_64-w64-mingw32-clang >/dev/null \
     || { echo "llvm-mingw extraction failed"; exit 1; }
 
-# The Unix side is x86_64: build under Rosetta on arm64 runners.
+# The Unix side is x86_64. `arch -x86_64` alone is NOT enough: clang keys its
+# default target off more than the process architecture — verified locally,
+# where clang under `arch -x86_64` still emitted arm64 ("unsupported option for
+# target 'arm64-apple-darwin'"). The target is therefore pinned with an
+# explicit -arch on the compiler, and `arch -x86_64` remains only so the build
+# can RUN the x86_64 tools it just built (through Rosetta).
 ARCH_PREFIX=""
 if [ "$(uname -m)" = "arm64" ]; then ARCH_PREFIX="arch -x86_64"; fi
 
@@ -87,8 +92,12 @@ if [ "$(uname -m)" = "arm64" ]; then ARCH_PREFIX="arch -x86_64"; fi
 #
 # OPTIMIZE=0 rebuilds with Wine's own defaults, for bisecting a suspected
 # flag-induced miscompile before blaming the source.
+# Apple clang rejects -march=x86-64-v2 (the microarch level names are
+# upstream-LLVM only; verified locally, it fails in one second) — the Unix
+# side uses feature flags instead. The PE side keeps the level name: llvm-mingw
+# IS upstream clang and accepts it.
 if [ "${OPTIMIZE:-1}" = "1" ]; then
-    UNIX_CFLAGS="-O3 -g0 -march=x86-64-v2"
+    UNIX_CFLAGS="-O3 -g0 -msse4.2 -mpopcnt"
     PE_CFLAGS="-O2 -g0 -march=x86-64-v2"
 else
     UNIX_CFLAGS=""
@@ -103,7 +112,8 @@ $ARCH_PREFIX "$SOURCES/wine/configure" \
     --without-alsa --without-pulse \
     --with-freetype --with-gnutls \
     --disable-tests \
-    CC="clang" CXX="clang++" \
+    --host=x86_64-apple-darwin \
+    CC="clang -arch x86_64" CXX="clang++ -arch x86_64" \
     CROSSCC="x86_64-w64-mingw32-clang" \
     ${UNIX_CFLAGS:+CFLAGS="$UNIX_CFLAGS"} \
     ${PE_CFLAGS:+CROSSCFLAGS="$PE_CFLAGS"}
