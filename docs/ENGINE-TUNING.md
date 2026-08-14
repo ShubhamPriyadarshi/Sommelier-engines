@@ -168,6 +168,35 @@ needs libinotify-kqueue built from source. CrossOver links
 headers are missing at build time. Affects `ReadDirectoryChangesW`, which
 launchers and mod managers use more than games do. Low priority, bounded work.
 
+### "Composited" in the Metal HUD, and what display capture actually needs
+The HUD has read `Composited` (orange) in every capture this session, which
+means the WindowServer is compositing the game rather than scanning its layer
+out directly — a full-screen composite per frame that direct scanout would
+skip.
+
+`CaptureDisplaysForFullscreen` is already `"y"` in the prefix, and the driver's
+condition for using it is exact (`cocoa_window.m`):
+
+    nowFullscreen = !(styleMask & NSWindowStyleMaskFullScreen)
+                    && screen_covered_by_rect(contentRect, [NSScreen screens])
+
+so the window must cover a screen and must *not* be in macOS-native fullscreen;
+only then does `updateFullscreenWindows` call `CGCaptureAllDisplays()`.
+
+Both conditions appear satisfied in the sessions measured, so capture is
+presumably happening and the compositing has another cause. The most plausible
+remaining one is scaling: a 1440x900 drawable on a 2880x1800 panel has to be
+resampled by the WindowServer, and that alone forbids direct scanout. If that is
+right the "fix" is to render at the native backing resolution — four times the
+pixels to save one composite, which is a bad trade on a 7-core GPU and explains
+nothing worth changing.
+
+**Unresolved.** Distinguishing "capture failed", "the HUD forces compositing"
+and "scaling forbids it" needs controlled launches with the HUD toggled and the
+resolution matched to the panel. Worth doing only if someone wants to chase the
+last composite; the mechanism above is written down so the next attempt starts
+from the condition rather than from guesswork.
+
 ### MoltenVK tunables
 The MoltenVK tree ships performance-relevant knobs worth an A/B if DXVK ever
 becomes the interesting backend here:
@@ -190,7 +219,28 @@ engine would crash on older systems for a gain Wine barely sees.
 
 ---
 
-## 4. Patch ecosystem
+## 4. Where the search stopped paying
+
+The surfaces reviewed: CrossOver's full LGPL tree (env inventory, `CW HACK`
+inventory, `winemac.drv` registry keys, `server/thread.c`, wined3d settings),
+D3DMetal's complete `D3DM_*` inventory with disassembled defaults, Rosetta's
+runtime strings, MoltenVK's `MVK_CONFIG_*` set, DXVK's options, and the
+community patch repositories.
+
+What that yielded, in order of value: Rosetta AVX advertisement (verified by
+CPUID probe), D3DMetal bounds checking (default read from disassembly),
+GStreamer (a real missing dependency), `WINENCPU` (~2% on the wrong engine
+type), and a set of negative results that are worth as much — App Nap, thread
+QoS and controller support are all already correct.
+
+Later passes returned progressively less: DXVK's options do not apply to a
+D3DMetal setup, MoltenVK's do not either, and wined3d's registry settings
+(`csmt`, `VideoMemorySize`, shader model caps) only affect the WineD3D backend
+that games here do not use. **Further searching of these surfaces is unlikely to
+pay.** The remaining large win is architectural — an ARM64-native engine — not
+another flag.
+
+## 5. Patch ecosystem
 
 Catalogued in `patches/CANDIDATES.md` with provenance. The two class fixes worth
 carrying are the Endfield project's Rosetta signal corrections (multi-byte NOP
