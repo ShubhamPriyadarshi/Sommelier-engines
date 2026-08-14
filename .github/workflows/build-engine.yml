@@ -79,13 +79,31 @@ jobs:
           done
 
           # brew's exit code is not the thing that matters; whether the build
-          # can actually find these is. Assert that, and fail here rather than
-          # 50 minutes later inside configure.
+          # can find these is. Assert that, and fail here rather than 50
+          # minutes later inside configure.
+          #
+          # Each dependency is checked the way Wine's configure checks it, and
+          # nothing stricter. A first version demanded pkg-config metadata for
+          # gnutls and failed a toolchain that every previous build had used
+          # happily — configure finds gnutls by trying to link it
+          # ("checking for -lgnutls... libgnutls.30.dylib"), and never consults
+          # a .pc file. An assertion stricter than the build is a false alarm.
+          for lib in libgnutls.dylib libfreetype.dylib; do
+            [ -e "/usr/local/lib/$lib" ] \
+              || { echo "FATAL: /usr/local/lib/$lib missing"; exit 1; }
+            echo "  ok: $lib"
+          done
+          [ -e /usr/local/include/freetype2/ft2build.h ] \
+            || { echo "FATAL: freetype headers missing"; exit 1; }
+          echo "  ok: ft2build.h"
+
+          # GStreamer is the one configure really does resolve through
+          # pkg-config, so this is the check that matches the build.
           PKGCONF=/usr/local/bin/pkgconf
           [ -x "$PKGCONF" ] || PKGCONF=/usr/local/bin/pkg-config
-          [ -x "$PKGCONF" ] || { echo "no x86_64 pkg-config"; exit 1; }
+          [ -x "$PKGCONF" ] || { echo "FATAL: no x86_64 pkg-config"; exit 1; }
           export PKG_CONFIG_LIBDIR=/usr/local/lib/pkgconfig
-          for pc in gnutls freetype2 gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0; do
+          for pc in gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0; do
             "$PKGCONF" --exists "$pc" \
               || { echo "FATAL: $pc is not usable by the build"; exit 1; }
             echo "  ok: $pc $("$PKGCONF" --modversion "$pc")"
