@@ -1,0 +1,16 @@
+Sommelier Wine engine @VERSION@ — built from CrossOver's published sources.
+
+This engine contains Wine, © 1993–2026 the Wine project authors and
+CodeWeavers, Inc., licensed under the GNU Lesser General Public License
+version 2.1 or later (see LICENSE.LGPL-2.1 in this directory).
+
+Complete corresponding source — the upstream source tarball, all patches, and
+the build scripts used to produce this binary — is published alongside this
+engine's release:
+
+    https://github.com/ShubhamPriyadarshi/Sommelier-engines/releases
+
+"CrossOver" is a trademark of CodeWeavers, Inc. This engine is built from
+their openly published sources but is not CrossOver, and is neither produced
+nor endorsed by CodeWeavers. CrossOver licenses fund much of Wine's
+development: https://www.codeweavers.com

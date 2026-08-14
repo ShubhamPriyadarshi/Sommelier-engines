@@ -1,0 +1,47 @@
+name: Build engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      cx_version:
+        description: "CrossOver sources version (e.g. 26.3.0)"
+        required: true
+        default: "26.3.0"
+
+jobs:
+  build:
+    # macOS 14+ arm64 runners; the Unix side builds x86_64 under Rosetta,
+    # which the runners support out of the box.
+    runs-on: macos-14
+    timeout-minutes: 180   # a full Wine build is 1–2 h; leave headroom
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          brew install llvm-mingw bison mingw-w64 freetype gnutls sdl2 || true
+          softwareupdate --install-rosetta --agree-to-license || true
+
+      - name: Build
+        env:
+          CX_VERSION: ${{ inputs.cx_version }}
+        run: ./scripts/build.sh
+
+      - name: Assemble bundle
+        env:
+          CX_VERSION: ${{ inputs.cx_version }}
+        run: ./scripts/assemble-bundle.sh
+
+      # The release IS the compliance mechanism: binaries and their complete
+      # corresponding source are attached to the same tag, so neither can be
+      # published without the other.
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: SOMWineCX${{ inputs.cx_version }}
+          draft: true   # verified on a real machine before publishing — see README
+          files: |
+            work/SOMWineCX${{ inputs.cx_version }}.tar.xz
+            work/sommelier-engine-patches-${{ inputs.cx_version }}.tar.gz
+            work/crossover-sources-${{ inputs.cx_version }}.tar.gz
+          body_path: work/source-sha256.txt
