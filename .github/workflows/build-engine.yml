@@ -22,7 +22,10 @@ jobs:
           # llvm-mingw is fetched by build.sh from its own releases; brew
           # covers the rest. No `|| true`: a missing dep should fail HERE.
           brew install bison freetype gnutls sdl2
-          softwareupdate --install-rosetta --agree-to-license || true
+          # Needs root on the runners, and a swallowed failure here surfaced
+          # as "C compiler cannot create executables" an hour later: the Unix
+          # side configures under `arch -x86_64`, which is Rosetta.
+          sudo softwareupdate --install-rosetta --agree-to-license
 
       - name: Build
         env:
@@ -33,6 +36,12 @@ jobs:
         env:
           CX_VERSION: ${{ inputs.cx_version }}
         run: ./scripts/assemble-bundle.sh
+
+      # configure buries the real error in config.log; without this step a
+      # failure is a useless one-liner.
+      - name: Dump config.log on failure
+        if: failure()
+        run: tail -80 work/build/config.log || true
 
       # The release IS the compliance mechanism: binaries and their complete
       # corresponding source are attached to the same tag, so neither can be
