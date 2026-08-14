@@ -134,9 +134,21 @@ DEP_LDFLAGS="-L$X86_BREW/lib"
 # ccache turns a retry into "recompile only past the failure point": objects
 # are keyed on preprocessed content, so dependency and flag changes invalidate
 # only what they actually touch. The wrappers prefix the real compilers.
+# Looked up in the known install locations as well as PATH: a PATH lookup
+# alone silently returned nothing on CI, and "no ccache" is indistinguishable
+# from "cache miss" once the build is running.
 CCACHE="$(command -v ccache || true)"
+for candidate in /usr/local/bin/ccache /opt/homebrew/bin/ccache; do
+    [ -n "$CCACHE" ] && break
+    [ -x "$candidate" ] && CCACHE="$candidate"
+done
 if [ -n "$CCACHE" ]; then
+    echo "ccache: $CCACHE ($("$CCACHE" --version 2>/dev/null | head -1))"
     export CCACHE_DIR="$WORK/ccache"
+    # Created up front so the workflow's save step always has a path to
+    # archive. Its absence is what made every save report a validation error
+    # rather than an empty cache.
+    mkdir -p "$CCACHE_DIR"
     export CCACHE_MAXSIZE=3G
     # Without these the hit rate on a CI runner is far lower than it looks:
     #   BASEDIR      the tree is re-extracted under an absolute path each run;
@@ -156,6 +168,7 @@ if [ -n "$CCACHE" ]; then
     HOST_CXX="$CCACHE /usr/bin/clang++ -arch x86_64"
     CROSS_CC="$CCACHE $CROSS_CLANG"
 else
+    echo "::warning::ccache not found — this build will not be checkpointed"
     HOST_CC="/usr/bin/clang -arch x86_64"
     HOST_CXX="/usr/bin/clang++ -arch x86_64"
     CROSS_CC="$CROSS_CLANG"

@@ -62,11 +62,19 @@ jobs:
           # SONAME_LIBVULKAN exists (their tree always ships MoltenVK, so they
           # dropped upstream's #ifdef), and DXVK needs winevulkan at runtime.
           arch -x86_64 /usr/local/bin/brew install gnutls freetype sdl2 pkgconf molten-vk
-          # The runner image ships ca-certificates already linked, and brew
-          # dies re-pouring it as a ccache dependency. Overwrite-link first.
-          brew link --overwrite ca-certificates 2>/dev/null || true
-          brew install ccache \
-            || echo "::warning::ccache unavailable; build proceeds uncached"
+          # ccache comes from its own release, not brew: brew kept failing to
+          # pour it (a dependency is already linked on the runner image) and
+          # the failure was swallowed by a fallback, so ten runs compiled
+          # uncached while the logs claimed checkpointing was in place.
+          # Pinned, like llvm-mingw, so builds stay reproducible.
+          CCACHE_VERSION=4.13.6
+          curl -fL -o /tmp/ccache.tar.gz \
+            "https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION-darwin.tar.gz"
+          tar -xzf /tmp/ccache.tar.gz -C /tmp
+          sudo install -m 0755 "/tmp/ccache-$CCACHE_VERSION-darwin/ccache" /usr/local/bin/ccache
+          # No fallback: if the cache tool is missing we want to know here,
+          # not from a 50-minute build that silently recompiled everything.
+          ccache --version
           ls -la /usr/local/bin/ | grep -i pkg || true
           ls /usr/local/lib/pkgconfig/ | head -20 || true
 
