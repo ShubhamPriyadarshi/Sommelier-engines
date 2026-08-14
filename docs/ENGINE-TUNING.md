@@ -70,6 +70,36 @@ This one came from combining a web lead with an empirical check — the search
 mentioned the variable, the CPUID probe proved it does something. Neither half
 would have been enough.
 
+### D3DMetal shader bounds checking is on by default
+The full `D3DM_*` inventory, with defaults read from the disassembly rather
+than assumed. All are parsed with `atoi`; the ones marked *default on* preload
+their register with 1 and let the variable override it, so those can only ever
+be written to turn a feature **off**:
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `D3DM_BOUNDS_CHECK` | **on** | bounds-tests every translated resource access |
+| `D3DM_MIN_LOD_CLAMP` | on | clamps minimum mip level |
+| `D3DM_LOD_BIAS` | on | LOD bias support (a toggle, not a value) |
+| `D3DM_POSITION_INVARIANCE` | on | consistent vertex positions across passes |
+| `D3DM_FLUSH_POS_INF_TO_NAN` | on | float edge-case handling |
+| `D3DM_IGNORE_D3D11_RENDER_BARRIERS` | from device caps | skips render-to-UAV barriers |
+| `D3DM_SUPPORT_DXR` | from device caps | ray tracing |
+| `D3DM_MTL4` | capability probe | Metal 4 backend (macOS 27+) |
+
+`D3DM_BOUNDS_CHECK` is the interesting one: a bounds test on every resource
+access is GPU work inside the inner loop of every shader. Shipped as
+`GameTweaks.disableBoundsChecking`, off by default and D3DMetal-only.
+
+The failure mode is why it stays opt-in: without the check an out-of-bounds
+read returns undefined data instead of a clamped result, and on a GPU that is a
+hang or corruption rather than a tidy error. Apple did not leave this on by
+accident. Unmeasured — worth an A/B on a shader-heavy title.
+
+`D3DM_IGNORE_D3D11_RENDER_BARRIERS` is the second candidate, but it defaults
+from device capability rather than a constant, so overriding it means
+contradicting what the driver reported. Not shipped.
+
 ### GTA 5 must never see an NVIDIA adapter — and the guard is backend-specific
 `CW HACK 19355` in `dlls/wined3d/directx.c` rewrites the adapter identity to an
 AMD Radeon RX 480 when the executable is `GTA5.exe` and the vendor reads as
