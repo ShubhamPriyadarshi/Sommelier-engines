@@ -51,6 +51,38 @@ Machine-dependent by construction: offered only when
 `MacHardware.hasMeaningfulEfficiencyCores`, so an 8+2 Max never sees a control
 that would only cost it throughput.
 
+### Rosetta AVX advertisement — the best find of the review
+Rosetta 2 **can** translate AVX and AVX2 — its runtime carries
+`translate_avx_low`, `guest_avx_state_from_host_state` and an
+`X86MachineContextAvx64` — but it does not tell the guest so unless asked.
+Verified with a CPUID probe in a translated process on macOS 27:
+
+    default:                    AVX=0  AVX2=0
+    ROSETTA_ADVERTISE_AVX=1:    AVX=1  AVX2=1
+
+The symptom is a game refusing to start over CPU requirements, or silently
+taking a slower non-AVX path, on a machine that could run the AVX one. Shipped
+as `GameTweaks.advertiseAVX`. Off by default because Apple made it opt-in: a
+title that then takes an AVX path exercises translation the default
+configuration never runs, so per-game reversibility matters.
+
+This one came from combining a web lead with an empirical check — the search
+mentioned the variable, the CPUID probe proved it does something. Neither half
+would have been enough.
+
+### GTA 5 must never see an NVIDIA adapter — and the guard is backend-specific
+`CW HACK 19355` in `dlls/wined3d/directx.c` rewrites the adapter identity to an
+AMD Radeon RX 480 when the executable is `GTA5.exe` and the vendor reads as
+NVIDIA, because the game crashes on launch trying to initialise NVAPI.
+
+**The hack lives in wined3d only.** A game running on D3DMetal never passes
+through it, so Sommelier's NVIDIA adapter override
+(`D3DM_VENDOR_ID`/`D3DM_DEVICE_ID`, currently scoped to Jurassic World
+Evolution 2) would crash GTA 5 with no protection. The existing per-app guard
+already prevents this; the rule is that the spoof stays opt-in per title and is
+never made general. Deep Rock Galactic independently confirms the danger — it
+hangs when given the same identity.
+
 ---
 
 ## 2. Ruled out — already correct, do not "fix" these
