@@ -8,6 +8,11 @@ on:
         required: true
         default: "26.3.0"
 
+# The default workflow token is read-only, so creating a release 403s after a
+# successful hour-long build. Scoped to contents rather than write-all.
+permissions:
+  contents: write
+
 jobs:
   build:
     # macOS 14+ arm64 runners; the Unix side builds x86_64 under Rosetta,
