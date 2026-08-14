@@ -42,6 +42,34 @@ cp -R "$PREFIX/share" "$BUNDLE/share"
 # install_name_tool surgery. Walk otool -L transitively from every built
 # binary and copy in everything that lives under /usr/local.
 mkdir -p "$BUNDLE/lib/external"
+
+# Seed the closure with the dlopen'd sonames first. The transitive walk below
+# reads otool -L, which only sees link-time dependencies — anything Wine
+# dlopens by soname (configure's SONAME_LIB* mechanism) appears in no load
+# command and is invisible to it. That is how the first bundle shipped without
+# FreeType (no fonts), gnutls (no schannel TLS, so no Steam login), MoltenVK
+# (no Vulkan) or SDL2 (no controllers) while looking complete. The list is
+# what `strings` finds as bare dylib names across the built unix .so files;
+# cups and dbus resolve from macOS or degrade gracefully, so brew absence is
+# not fatal for them.
+for soname in libfreetype.6.dylib libgnutls.30.dylib libMoltenVK.dylib \
+              libSDL2-2.0.0.dylib libodbc.dylib libdbus-1.3.dylib; do
+    [ -f "$BUNDLE/lib/external/$soname" ] && continue
+    src="$(find /usr/local/opt -name "$soname" -type f 2>/dev/null | head -1)"
+    if [ -n "$src" ]; then
+        cp "$src" "$BUNDLE/lib/external/$soname"
+        chmod u+w "$BUNDLE/lib/external/$soname"
+        echo "  seeded: $soname"
+    else
+        echo "  no brew copy of $soname (skipped)"
+    fi
+done
+# Wine cannot work without fonts or TLS; fail the build rather than ship that.
+for must in libfreetype.6.dylib libgnutls.30.dylib libMoltenVK.dylib; do
+    [ -f "$BUNDLE/lib/external/$must" ] \
+        || { echo "FATAL: $must not bundled"; exit 1; }
+done
+
 copied=1
 while [ "$copied" -eq 1 ]; do
     copied=0
