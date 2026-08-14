@@ -42,12 +42,21 @@ for patch in "$ROOT"/patches/*.patch; do
 done
 
 # ---- 2. Toolchain ----------------------------------------------------------
-# llvm-mingw supplies the PE cross-compilers; bison in macOS is too old.
-# CI installs these via homebrew (see workflow); locally: brew install
-# llvm-mingw bison mingw-w64 freetype gnutls sdl2 || true
-export PATH="$(brew --prefix bison)/bin:$PATH"
+# llvm-mingw supplies the PE cross-compilers. It is not a Homebrew formula
+# (verified: the first CI run died on exactly that), so fetch the official
+# macOS-universal release instead — pinned, because a floating "latest" makes
+# builds unreproducible and the toolchain is part of the corresponding source
+# story. bison comes from brew; macOS's own is too old for Wine.
+LLVM_MINGW_VERSION="20260616"
+LLVM_MINGW="llvm-mingw-$LLVM_MINGW_VERSION-ucrt-macos-universal"
+if [ ! -d "$WORK/$LLVM_MINGW" ]; then
+    curl -fL -o "$WORK/$LLVM_MINGW.tar.xz" \
+        "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_VERSION/$LLVM_MINGW.tar.xz"
+    tar -xf "$WORK/$LLVM_MINGW.tar.xz" -C "$WORK"
+fi
+export PATH="$WORK/$LLVM_MINGW/bin:$(brew --prefix bison)/bin:$PATH"
 command -v x86_64-w64-mingw32-clang >/dev/null \
-    || { echo "llvm-mingw not on PATH (brew install llvm-mingw)"; exit 1; }
+    || { echo "llvm-mingw extraction failed"; exit 1; }
 
 # The Unix side is x86_64: build under Rosetta on arm64 runners.
 ARCH_PREFIX=""

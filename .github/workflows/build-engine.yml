@@ -19,7 +19,9 @@ jobs:
 
       - name: Toolchain
         run: |
-          brew install llvm-mingw bison mingw-w64 freetype gnutls sdl2 || true
+          # llvm-mingw is fetched by build.sh from its own releases; brew
+          # covers the rest. No `|| true`: a missing dep should fail HERE.
+          brew install bison freetype gnutls sdl2
           softwareupdate --install-rosetta --agree-to-license || true
 
       - name: Build
