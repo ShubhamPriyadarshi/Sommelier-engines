@@ -110,6 +110,15 @@ else
     PE_CFLAGS=""
 fi
 
+# Dependencies come from the x86_64 Homebrew at /usr/local (see workflow);
+# the arm64 one at /opt/homebrew must never leak into the link. Pinning
+# PKG_CONFIG_LIBDIR (not just PATH) is what guarantees that.
+X86_BREW="/usr/local"
+export PKG_CONFIG="$X86_BREW/bin/pkgconf"
+export PKG_CONFIG_LIBDIR="$X86_BREW/lib/pkgconfig"
+DEP_CPPFLAGS="-I$X86_BREW/include"
+DEP_LDFLAGS="-L$X86_BREW/lib"
+
 cd "$BUILD"
 $ARCH_PREFIX "$SOURCES/wine/configure" \
     --prefix="$PREFIX" \
@@ -121,6 +130,7 @@ $ARCH_PREFIX "$SOURCES/wine/configure" \
     --host=x86_64-apple-darwin \
     CC="/usr/bin/clang -arch x86_64" CXX="/usr/bin/clang++ -arch x86_64" \
     CROSSCC="$CROSS_CLANG" \
+    CPPFLAGS="$DEP_CPPFLAGS" LDFLAGS="$DEP_LDFLAGS" \
     ${UNIX_CFLAGS:+CFLAGS="$UNIX_CFLAGS"} \
     ${PE_CFLAGS:+CROSSCFLAGS="$PE_CFLAGS"}
 

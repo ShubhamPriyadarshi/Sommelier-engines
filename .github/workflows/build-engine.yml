@@ -21,11 +21,19 @@ jobs:
         run: |
           # llvm-mingw is fetched by build.sh from its own releases; brew
           # covers the rest. No `|| true`: a missing dep should fail HERE.
-          brew install bison freetype gnutls sdl2
           # Needs root on the runners, and a swallowed failure here surfaced
           # as "C compiler cannot create executables" an hour later: the Unix
           # side configures under `arch -x86_64`, which is Rosetta.
           sudo softwareupdate --install-rosetta --agree-to-license
+          # bison runs natively at build time: arm64 brew is fine for it.
+          brew install bison
+          # The link-time dependencies must be x86_64 — run 5 proved the arm64
+          # ones fail with "libgnutls 64-bit development files not found" — so
+          # they come from a second Homebrew under Rosetta at /usr/local.
+          # The bottles are prebuilt; this is minutes, not a source build.
+          NONINTERACTIVE=1 arch -x86_64 /bin/bash -c \
+            "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          arch -x86_64 /usr/local/bin/brew install gnutls freetype sdl2 pkgconf
 
       - name: Build
         env:

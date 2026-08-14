@@ -33,6 +33,31 @@ cp -R "$PREFIX/bin"   "$BUNDLE/bin"
 cp -R "$PREFIX/lib"   "$BUNDLE/lib"
 cp -R "$PREFIX/share" "$BUNDLE/share"
 
+# ---- Runtime dependency closure --------------------------------------------
+# The engine links against x86_64 Homebrew dylibs that users do not have.
+# CrossOver's answer, which Sommelier's launch environment already expects, is
+# lib/external: DYLD_FALLBACK_LIBRARY_PATH searches it by leaf name when the
+# recorded /usr/local install name resolves to nothing on the user's machine —
+# which is exactly why a plain copy of the closure works with no
+# install_name_tool surgery. Walk otool -L transitively from every built
+# binary and copy in everything that lives under /usr/local.
+mkdir -p "$BUNDLE/lib/external"
+copied=1
+while [ "$copied" -eq 1 ]; do
+    copied=0
+    while IFS= read -r -d '' macho; do
+        for dep in $(otool -L "$macho" 2>/dev/null | awk '/\/usr\/local\//{print $1}'); do
+            leaf="$(basename "$dep")"
+            if [ -f "$dep" ] && [ ! -f "$BUNDLE/lib/external/$leaf" ]; then
+                cp "$dep" "$BUNDLE/lib/external/$leaf"
+                chmod u+w "$BUNDLE/lib/external/$leaf"
+                copied=1
+            fi
+        done
+    done < <(find "$BUNDLE" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) -print0)
+done
+echo "Bundled $(ls "$BUNDLE/lib/external" | wc -l | tr -d ' ') external dylibs"
+
 mkdir -p "$BUNDLE/share/doc"
 cp "$ROOT/resources/LICENSE.LGPL-2.1" "$BUNDLE/share/doc/"
 sed -e "s/@VERSION@/$VERSION/" "$ROOT/resources/NOTICE.template" \
