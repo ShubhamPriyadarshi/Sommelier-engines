@@ -113,6 +113,9 @@ jobs:
           for d in /usr/local/opt/*/lib/pkgconfig /usr/local/opt/*/share/pkgconfig; do
             [ -d "$d" ] && PC_DIRS="$PC_DIRS:$d"
           done
+          # System pkgconfig last: zlib ships with macOS, not brew, and
+          # gnutls requires it. Homebrew still wins any name collision.
+          [ -d /usr/lib/pkgconfig ] && PC_DIRS="$PC_DIRS:/usr/lib/pkgconfig"
           export PKG_CONFIG_LIBDIR="$PC_DIRS"
           echo "=== pkg-config resolution ==="
           echo "search dirs: $(echo "$PC_DIRS" | tr ':' '\n' | wc -l)"

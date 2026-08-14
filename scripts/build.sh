@@ -138,14 +138,24 @@ export PKG_CONFIG
 # lib/pkgconfig, so their .pc files are invisible there — and a package whose
 # own .pc *is* in that directory still fails to resolve when a transitive
 # Requires: lands on one of them. That is how gstreamer-1.0.pc managed to be
-# present and unusable at the same time, and why gnutls failed the same check
-# a run earlier; that failure was a true positive and was wrongly dismissed.
-# Enumerate every keg under the x86_64 prefix. All of them live under
-# /usr/local, so the arm64 guarantee is unchanged.
+# present and unusable at the same time. Enumerate every keg under the x86_64
+# prefix; all of them live under /usr/local, so the arm64 guarantee holds.
+#
+# gnutls failed this check a run earlier and was dismissed as over-strict.
+# Half right: configure does find gnutls by link test and never reads its .pc,
+# so the check is not required — but it is a cheap canary for search-path
+# completeness, and it went on to catch the missing system directory below
+# that would have taken GStreamer down too. Worth keeping for that alone.
 PC_DIRS="$X86_BREW/lib/pkgconfig:$X86_BREW/share/pkgconfig"
 for pc_dir in "$X86_BREW"/opt/*/lib/pkgconfig "$X86_BREW"/opt/*/share/pkgconfig; do
     [ -d "$pc_dir" ] && PC_DIRS="$PC_DIRS:$pc_dir"
 done
+# macOS's own pkgconfig directory, last so Homebrew always wins a name
+# collision. Replacing the default path dropped this too, and that is what
+# "Package 'zlib', required by 'gnutls', not found" was: zlib ships with the
+# system, not from brew, and zlib.pc lives only here. The .pc files are plain
+# text describing universal system libraries, so this is arch-neutral.
+[ -d /usr/lib/pkgconfig ] && PC_DIRS="$PC_DIRS:/usr/lib/pkgconfig"
 export PKG_CONFIG_LIBDIR="$PC_DIRS"
 
 # Resolve the packages configure will need, with --print-errors so a failure
