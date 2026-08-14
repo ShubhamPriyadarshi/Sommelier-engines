@@ -68,6 +68,33 @@ if [ "$(uname -m)" = "arm64" ]; then ARCH_PREFIX="arch -x86_64"; fi
 #   --without-x                 the Mac driver, not X11
 #   --with-metal / moltenvk     vulkan loader comes from MoltenVK at runtime
 #   --disable-winedbg           trims the bundle; revisit if debugging needs it
+# ---- Optimization ----------------------------------------------------------
+# Target: Apple Silicon running the result through Rosetta 2. Honest framing:
+# flags here buy low single digits — the engine's hot paths are the game's own
+# code and the graphics backend, not Wine — but the right set still matters:
+#
+#   -O3 on the Unix side       Wine's default is -O2; the Unix side carries the
+#                              server round-trips and msync paths.
+#   -O2 on the PE side         the builtin DLLs; kept a notch conservative
+#                              because a miscompiled d3d/ntdll PE is the
+#                              hardest failure in this stack to diagnose.
+#   -march=x86-64-v2           SSE4.2/POPCNT everywhere. Rosetta translates v2
+#                              cleanly on every macOS this can run on. v3 (AVX2)
+#                              is deliberately NOT used: Rosetta only gained
+#                              AVX2 recently and a v3 engine would crash on
+#                              older systems for a gain Wine itself barely sees.
+#   -g0                        no debug info; smaller bundle, faster cold load.
+#
+# OPTIMIZE=0 rebuilds with Wine's own defaults, for bisecting a suspected
+# flag-induced miscompile before blaming the source.
+if [ "${OPTIMIZE:-1}" = "1" ]; then
+    UNIX_CFLAGS="-O3 -g0 -march=x86-64-v2"
+    PE_CFLAGS="-O2 -g0 -march=x86-64-v2"
+else
+    UNIX_CFLAGS=""
+    PE_CFLAGS=""
+fi
+
 cd "$BUILD"
 $ARCH_PREFIX "$SOURCES/wine/configure" \
     --prefix="$PREFIX" \
@@ -77,7 +104,9 @@ $ARCH_PREFIX "$SOURCES/wine/configure" \
     --with-freetype --with-gnutls \
     --disable-tests \
     CC="clang" CXX="clang++" \
-    CROSSCC="x86_64-w64-mingw32-clang"
+    CROSSCC="x86_64-w64-mingw32-clang" \
+    ${UNIX_CFLAGS:+CFLAGS="$UNIX_CFLAGS"} \
+    ${PE_CFLAGS:+CROSSCFLAGS="$PE_CFLAGS"}
 
 $ARCH_PREFIX make -j"$JOBS"
 $ARCH_PREFIX make install-lib
