@@ -17,6 +17,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Checkpointing. Every failed run used to recompile ~30 minutes of
+      # identical work to reach its failure point. Two caches fix that, and
+      # both are saved with `if: always()` — the default save-on-success is
+      # useless here, since failing runs are exactly the ones we resume from.
+      #   downloads: source tarball + llvm-mingw, keyed on version (static)
+      #   ccache:    object-level compile cache, rolling key
+      - name: Restore downloads cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            work/crossover-sources-*.tar.gz
+            work/llvm-mingw-*
+          key: downloads-${{ inputs.cx_version }}-llvm20260616
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: work/ccache
+          key: ccache-${{ inputs.cx_version }}-${{ github.run_id }}
+          restore-keys: ccache-${{ inputs.cx_version }}-
+
       - name: Toolchain
         run: |
           # llvm-mingw is fetched by build.sh from its own releases; brew
@@ -37,6 +57,7 @@ jobs:
           # SONAME_LIBVULKAN exists (their tree always ships MoltenVK, so they
           # dropped upstream's #ifdef), and DXVK needs winevulkan at runtime.
           arch -x86_64 /usr/local/bin/brew install gnutls freetype sdl2 pkgconf molten-vk
+          brew install ccache
           ls -la /usr/local/bin/ | grep -i pkg || true
           ls /usr/local/lib/pkgconfig/ | head -20 || true
 
@@ -49,6 +70,21 @@ jobs:
         env:
           CX_VERSION: ${{ inputs.cx_version }}
         run: ./scripts/assemble-bundle.sh
+
+      - name: Save downloads cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            work/crossover-sources-*.tar.gz
+            work/llvm-mingw-*
+          key: downloads-${{ inputs.cx_version }}-llvm20260616
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: work/ccache
+          key: ccache-${{ inputs.cx_version }}-${{ github.run_id }}
 
       # configure buries the real error in config.log; without this step a
       # failure is a useless one-liner.

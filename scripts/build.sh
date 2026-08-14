@@ -131,6 +131,22 @@ export PKG_CONFIG_LIBDIR="$X86_BREW/lib/pkgconfig"
 DEP_CPPFLAGS="-I$X86_BREW/include -I$X86_BREW/include/freetype2"
 DEP_LDFLAGS="-L$X86_BREW/lib"
 
+# ccache turns a retry into "recompile only past the failure point": objects
+# are keyed on preprocessed content, so dependency and flag changes invalidate
+# only what they actually touch. The wrappers prefix the real compilers.
+CCACHE="$(command -v ccache || true)"
+if [ -n "$CCACHE" ]; then
+    export CCACHE_DIR="$WORK/ccache"
+    export CCACHE_MAXSIZE=3G
+    HOST_CC="$CCACHE /usr/bin/clang -arch x86_64"
+    HOST_CXX="$CCACHE /usr/bin/clang++ -arch x86_64"
+    CROSS_CC="$CCACHE $CROSS_CLANG"
+else
+    HOST_CC="/usr/bin/clang -arch x86_64"
+    HOST_CXX="/usr/bin/clang++ -arch x86_64"
+    CROSS_CC="$CROSS_CLANG"
+fi
+
 cd "$BUILD"
 $ARCH_PREFIX "$SOURCES/wine/configure" \
     --prefix="$PREFIX" \
@@ -140,8 +156,8 @@ $ARCH_PREFIX "$SOURCES/wine/configure" \
     --with-freetype --with-gnutls \
     --disable-tests \
     --host=x86_64-apple-darwin \
-    CC="/usr/bin/clang -arch x86_64" CXX="/usr/bin/clang++ -arch x86_64" \
-    CROSSCC="$CROSS_CLANG" \
+    CC="$HOST_CC" CXX="$HOST_CXX" \
+    CROSSCC="$CROSS_CC" \
     CPPFLAGS="$DEP_CPPFLAGS" LDFLAGS="$DEP_LDFLAGS" \
     ${UNIX_CFLAGS:+CFLAGS="$UNIX_CFLAGS"} \
     ${PE_CFLAGS:+CROSSCFLAGS="$PE_CFLAGS"}
