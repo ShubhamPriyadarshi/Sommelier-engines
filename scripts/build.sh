@@ -160,13 +160,20 @@ export PKG_CONFIG_LIBDIR="$PC_DIRS"
 
 # Resolve the packages configure will need, with --print-errors so a failure
 # names the unresolvable dependency instead of costing a run to diagnose.
-for pc in glib-2.0 gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0; do
-    "$PKG_CONFIG" --print-errors --exists "$pc" || {
-        echo "FATAL: $pc does not resolve; configure would disable GStreamer"
-        exit 1
-    }
-    echo "  ok: $pc $("$PKG_CONFIG" --modversion "$pc")"
+# Collected, not fail-fast: stopping at the first unresolved package meant a
+# CI run bought exactly one name and the next hid behind it.
+pc_failed=""
+for pc in glib-2.0 gobject-2.0 gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0; do
+    if "$PKG_CONFIG" --print-errors --exists "$pc"; then
+        echo "  ok: $pc $("$PKG_CONFIG" --modversion "$pc")"
+    else
+        pc_failed="$pc_failed $pc"
+    fi
 done
+[ -z "$pc_failed" ] || {
+    echo "FATAL: unresolved:$pc_failed — configure would disable GStreamer"
+    exit 1
+}
 # freetype2 on CPPFLAGS as well, so the build does not depend on pkg-config
 # behaving for the one library whose headers hide a directory down.
 DEP_CPPFLAGS="-I$X86_BREW/include -I$X86_BREW/include/freetype2"
