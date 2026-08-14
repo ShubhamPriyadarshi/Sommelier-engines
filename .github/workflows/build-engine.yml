@@ -97,16 +97,31 @@ jobs:
             || { echo "FATAL: freetype headers missing"; exit 1; }
           echo "  ok: ft2build.h"
 
-          # GStreamer is the one configure really does resolve through
-          # pkg-config, so this is the check that matches the build.
+          # GStreamer is reported, not asserted. Two runs were spent guessing
+          # why pkg-config could not see it, and a guess costs a cycle each
+          # time; configure is the authority and build.sh already fails if it
+          # disables GStreamer, so let the facts arrive instead.
           PKGCONF=/usr/local/bin/pkgconf
           [ -x "$PKGCONF" ] || PKGCONF=/usr/local/bin/pkg-config
           [ -x "$PKGCONF" ] || { echo "FATAL: no x86_64 pkg-config"; exit 1; }
           export PKG_CONFIG_LIBDIR=/usr/local/lib/pkgconfig
+          echo "=== GStreamer diagnostics ==="
+          echo "brew prefix: $(arch -x86_64 /usr/local/bin/brew --prefix gstreamer 2>&1)"
+          echo "--- .pc files anywhere under the keg ---"
+          find "$(arch -x86_64 /usr/local/bin/brew --prefix gstreamer 2>/dev/null)" \
+            -name '*.pc' 2>/dev/null | head -10
+          echo "--- gst headers ---"
+          find /usr/local/include -maxdepth 3 -name 'gst.h' 2>/dev/null | head -3
+          echo "--- gstreamer .pc in the shared prefix ---"
+          ls /usr/local/lib/pkgconfig/ 2>/dev/null | grep -i gst | head -10
+          echo "--- total .pc files visible ---"
+          ls /usr/local/lib/pkgconfig/ 2>/dev/null | wc -l
           for pc in gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0; do
-            "$PKGCONF" --exists "$pc" \
-              || { echo "FATAL: $pc is not usable by the build"; exit 1; }
-            echo "  ok: $pc $("$PKGCONF" --modversion "$pc")"
+            if "$PKGCONF" --exists "$pc" 2>/dev/null; then
+              echo "  ok: $pc $("$PKGCONF" --modversion "$pc")"
+            else
+              echo "  MISSING: $pc"
+            fi
           done
           # ccache comes from its own release, not brew: brew kept failing to
           # pour it (a dependency is already linked on the runner image) and
