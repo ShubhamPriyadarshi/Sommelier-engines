@@ -55,7 +55,10 @@ mkdir -p "$BUNDLE/lib/external"
 for soname in libfreetype.6.dylib libgnutls.30.dylib libMoltenVK.dylib \
               libSDL2-2.0.0.dylib libodbc.dylib libdbus-1.3.dylib; do
     [ -f "$BUNDLE/lib/external/$soname" ] && continue
-    src="$(find /usr/local/opt -name "$soname" -type f 2>/dev/null | head -1)"
+    # find -L: /usr/local/opt/* are symlinks into the Cellar, and plain find
+    # refuses to descend through them — every seed silently "skipped" on the
+    # first attempt. The same artifact already burned the run-14 diagnostics.
+    src="$(find -L /usr/local/opt -name "$soname" -type f 2>/dev/null | head -1)"
     if [ -n "$src" ]; then
         cp "$src" "$BUNDLE/lib/external/$soname"
         chmod u+w "$BUNDLE/lib/external/$soname"
