@@ -131,7 +131,32 @@ for candidate in "$X86_BREW/bin/pkg-config" "$X86_BREW/bin/pkgconf"; do
 done
 [ -n "$PKG_CONFIG" ] || { echo "no x86_64 pkg-config in $X86_BREW/bin"; exit 1; }
 export PKG_CONFIG
-export PKG_CONFIG_LIBDIR="$X86_BREW/lib/pkgconfig"
+# PKG_CONFIG_LIBDIR replaces pkgconf's entire search path, and that is exactly
+# why it is used: nothing under /opt/homebrew (arm64) may leak into an x86_64
+# link. But a single directory is too narrow. Homebrew deliberately does not
+# symlink keg-only formulas (icu4c, openssl@3, expat, readline, sqlite) into
+# lib/pkgconfig, so their .pc files are invisible there — and a package whose
+# own .pc *is* in that directory still fails to resolve when a transitive
+# Requires: lands on one of them. That is how gstreamer-1.0.pc managed to be
+# present and unusable at the same time, and why gnutls failed the same check
+# a run earlier; that failure was a true positive and was wrongly dismissed.
+# Enumerate every keg under the x86_64 prefix. All of them live under
+# /usr/local, so the arm64 guarantee is unchanged.
+PC_DIRS="$X86_BREW/lib/pkgconfig:$X86_BREW/share/pkgconfig"
+for pc_dir in "$X86_BREW"/opt/*/lib/pkgconfig "$X86_BREW"/opt/*/share/pkgconfig; do
+    [ -d "$pc_dir" ] && PC_DIRS="$PC_DIRS:$pc_dir"
+done
+export PKG_CONFIG_LIBDIR="$PC_DIRS"
+
+# Resolve the packages configure will need, with --print-errors so a failure
+# names the unresolvable dependency instead of costing a run to diagnose.
+for pc in glib-2.0 gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0; do
+    "$PKG_CONFIG" --print-errors --exists "$pc" || {
+        echo "FATAL: $pc does not resolve; configure would disable GStreamer"
+        exit 1
+    }
+    echo "  ok: $pc $("$PKG_CONFIG" --modversion "$pc")"
+done
 # freetype2 on CPPFLAGS as well, so the build does not depend on pkg-config
 # behaving for the one library whose headers hide a directory down.
 DEP_CPPFLAGS="-I$X86_BREW/include -I$X86_BREW/include/freetype2"

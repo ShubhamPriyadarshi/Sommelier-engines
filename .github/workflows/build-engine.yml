@@ -82,12 +82,13 @@ jobs:
           # can find these is. Assert that, and fail here rather than 50
           # minutes later inside configure.
           #
-          # Each dependency is checked the way Wine's configure checks it, and
-          # nothing stricter. A first version demanded pkg-config metadata for
-          # gnutls and failed a toolchain that every previous build had used
-          # happily — configure finds gnutls by trying to link it
-          # ("checking for -lgnutls... libgnutls.30.dylib"), and never consults
-          # a .pc file. An assertion stricter than the build is a false alarm.
+          # configure finds gnutls by link test ("checking for -lgnutls..."),
+          # never by .pc, so the file check below is the one that matches the
+          # build. Note what the earlier pkg-config check on gnutls actually
+          # was: not an over-strict assertion, but the first sighting of the
+          # broken PKG_CONFIG_LIBDIR fixed below. Deleting it as a false alarm
+          # removed the detector and left the bug, which then cost two runs
+          # under a different name. Keep both checks.
           for lib in libgnutls.dylib libfreetype.dylib; do
             [ -e "/usr/local/lib/$lib" ] \
               || { echo "FATAL: /usr/local/lib/$lib missing"; exit 1; }
@@ -97,30 +98,29 @@ jobs:
             || { echo "FATAL: freetype headers missing"; exit 1; }
           echo "  ok: ft2build.h"
 
-          # GStreamer is reported, not asserted. Two runs were spent guessing
-          # why pkg-config could not see it, and a guess costs a cycle each
-          # time; configure is the authority and build.sh already fails if it
-          # disables GStreamer, so let the facts arrive instead.
+          # A single-directory PKG_CONFIG_LIBDIR made gstreamer-1.0.pc present
+          # and unresolvable at once: Homebrew keeps keg-only formulas out of
+          # lib/pkgconfig, so a transitive Requires: on icu4c or openssl@3 has
+          # nowhere to resolve from. Enumerate every keg under the x86_64
+          # prefix — still all /usr/local, so arm64 remains excluded. build.sh
+          # builds the identical path and is the authoritative gate; this runs
+          # first only so a broken toolchain fails in seconds, not after the
+          # compile. --print-errors makes a failure name the missing package.
           PKGCONF=/usr/local/bin/pkgconf
           [ -x "$PKGCONF" ] || PKGCONF=/usr/local/bin/pkg-config
           [ -x "$PKGCONF" ] || { echo "FATAL: no x86_64 pkg-config"; exit 1; }
-          export PKG_CONFIG_LIBDIR=/usr/local/lib/pkgconfig
-          echo "=== GStreamer diagnostics ==="
-          echo "brew prefix: $(arch -x86_64 /usr/local/bin/brew --prefix gstreamer 2>&1)"
-          echo "--- .pc files anywhere under the keg ---"
-          find "$(arch -x86_64 /usr/local/bin/brew --prefix gstreamer 2>/dev/null)" \
-            -name '*.pc' 2>/dev/null | head -10
-          echo "--- gst headers ---"
-          find /usr/local/include -maxdepth 3 -name 'gst.h' 2>/dev/null | head -3
-          echo "--- gstreamer .pc in the shared prefix ---"
-          ls /usr/local/lib/pkgconfig/ 2>/dev/null | grep -i gst | head -10
-          echo "--- total .pc files visible ---"
-          ls /usr/local/lib/pkgconfig/ 2>/dev/null | wc -l
-          for pc in gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0; do
-            if "$PKGCONF" --exists "$pc" 2>/dev/null; then
+          PC_DIRS=/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig
+          for d in /usr/local/opt/*/lib/pkgconfig /usr/local/opt/*/share/pkgconfig; do
+            [ -d "$d" ] && PC_DIRS="$PC_DIRS:$d"
+          done
+          export PKG_CONFIG_LIBDIR="$PC_DIRS"
+          echo "=== pkg-config resolution ==="
+          echo "search dirs: $(echo "$PC_DIRS" | tr ':' '\n' | wc -l)"
+          for pc in glib-2.0 gnutls gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0; do
+            if "$PKGCONF" --print-errors --exists "$pc"; then
               echo "  ok: $pc $("$PKGCONF" --modversion "$pc")"
             else
-              echo "  MISSING: $pc"
+              echo "FATAL: $pc does not resolve"; exit 1
             fi
           done
           # ccache comes from its own release, not brew: brew kept failing to
