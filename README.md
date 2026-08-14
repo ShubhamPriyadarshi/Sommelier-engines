@@ -56,6 +56,15 @@ must pass, on a real machine, the checklist in Sommelier's AGENTS.md:
 Kenshi (D3D11, CPU-bound) and The Witcher 3 (D3D12, GPU-bound) are the
 regression pair.
 
+## Tuning
+
+`docs/ENGINE-TUNING.md` records the review of CrossOver's sources for
+performance and compatibility: what was applied, what was **ruled out as
+already correct** (App Nap, Mach thread policy, controller support — all fine
+as shipped), and what remains open. Read the negative results before spending a
+50-minute build on an idea; several obvious-looking wins are already in the
+tree.
+
 ## Licensing
 
 See COMPLIANCE.md. The short version: every release ships the exact source it
