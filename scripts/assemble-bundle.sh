@@ -23,10 +23,10 @@ VERSION="${CX_VERSION:-26.3.0}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${WORK_DIR:-$ROOT/work}"
 PREFIX="$WORK/out"
-BUNDLE="$WORK/SOMWineCX$VERSION/wswine.bundle"
+BUNDLE="$WORK/WS12WineSommelier$VERSION/wswine.bundle"
 ENTITLEMENTS="$ROOT/resources/loader-entitlements.plist"
 
-rm -rf "$WORK/SOMWineCX$VERSION"
+rm -rf "$WORK/WS12WineSommelier$VERSION"
 mkdir -p "$BUNDLE"
 
 cp -R "$PREFIX/bin"   "$BUNDLE/bin"
@@ -108,8 +108,8 @@ echo "Entitlements verified on $(ls "$BUNDLE/bin" | tr '\n' ' ')"
 
 # ---- Release artifacts -----------------------------------------------------
 cd "$WORK"
-tar -cJf "SOMWineCX$VERSION.tar.xz" "SOMWineCX$VERSION"
+tar -cJf "WS12WineSommelier$VERSION.tar.xz" "WS12WineSommelier$VERSION"
 tar -czf "sommelier-engine-patches-$VERSION.tar.gz" \
     -C "$ROOT" patches scripts resources
 echo "Artifacts:"
-ls -lh "$WORK/SOMWineCX$VERSION.tar.xz" "$WORK/sommelier-engine-patches-$VERSION.tar.gz"
+ls -lh "$WORK/WS12WineSommelier$VERSION.tar.xz" "$WORK/sommelier-engine-patches-$VERSION.tar.gz"

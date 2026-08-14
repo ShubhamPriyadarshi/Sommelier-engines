@@ -124,10 +124,10 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: SOMWineCX${{ inputs.cx_version }}
+          tag_name: WS12WineSommelier${{ inputs.cx_version }}
           draft: true   # verified on a real machine before publishing — see README
           files: |
-            work/SOMWineCX${{ inputs.cx_version }}.tar.xz
+            work/WS12WineSommelier${{ inputs.cx_version }}.tar.xz
             work/sommelier-engine-patches-${{ inputs.cx_version }}.tar.gz
             work/crossover-sources-${{ inputs.cx_version }}.tar.gz
           body_path: work/source-sha256.txt

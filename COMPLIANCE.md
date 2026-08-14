@@ -27,7 +27,7 @@ that fails any line does not ship.
 
 ## Naming and trademarks
 
-- The engine name is `SOMWineCX<version>` and the display name "Sommelier Wine
+- The engine name is `WS12WineSommelier<version>` and the display name "Sommelier Wine
   (CrossOver sources) <version>". Describing provenance is nominative use;
   branding the product "CrossOver" is not. No CodeWeavers logos anywhere.
 - In-app credit (already in Sommelier's engines sheet): published engines are

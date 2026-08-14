@@ -15,7 +15,7 @@ crossover-sources-<v>.tar.gz  (CodeWeavers, LGPL parts of CrossOver)
 build output
         │  scripts/assemble-bundle.sh — wswine.bundle layout, entitlements, signing
         ▼
-SOMWineCX<v>.tar.xz            (GitHub Release asset)
+WS12WineSommelier<v>.tar.xz            (GitHub Release asset)
         +  crossover-sources-<v>.tar.gz   ← republished beside the binaries
         +  patches/ + scripts/ tarball    ← the rest of "complete corresponding source"
         ▼
@@ -24,8 +24,8 @@ feed/EngineList.txt            — one engine name per line; Sommelier's
                                  EngineFeed (archiveExtension: "tar.xz")
 ```
 
-The app parses `EngineList.txt` as one engine name per line and downloads
-`<downloadBase>/<name>.<archiveExtension>`. Keep names in the `SOMWineCX26.3.0`
+The app parses `EngineList.txt` as one engine name per line, and **only parses names matching `WS<n>Wine<flavour><version>`** — anything else is silently ignored, which made the first build invisible in the app. `Sommelier` is a registered flavour, so `WS12WineSommelier26.3.0` parses and displays correctly and downloads
+`<downloadBase>/<name>.<archiveExtension>`. Keep names in the `WS12WineSommelier26.3.0`
 shape — the `WS<n>Wine…` prefix belongs to Wineskin's feed; ours differs so the
 origin of an engine is never ambiguous.
 
