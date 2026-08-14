@@ -22,6 +22,23 @@ Two Rosetta 2 misbehaviours, found via Arknights: Endfield but generic:
 Class: every protected Windows game on Apple Silicon. Compatibility, not
 performance. Small, reviewable, engine-level. **Strongest candidate.**
 
+**Status: APPROVED (2026-08-14), staged, awaiting baseline verification.**
+The patch is fetched and reviewed in `staged-rosetta-vmprotect/` — the NOP
+length decode is a correct modrm/SIB/disp walk hooked into Wine's existing
+`handle_cet_nop` skip path (41 added lines, MIT-licensed, applies to
+`dlls/ntdll/unix/signal_x86_64.c`). Upstream tested against CX 26.2; ours is
+26.3, so expect clean-or-fuzzed apply. To activate once the faithful baseline
+passes the AGENTS checklist:
+
+    git mv patches/staged-rosetta-vmprotect/0001-*.patch patches/
+    # dispatch a build — ccache makes the delta minutes, not hours —
+    # then A/B a VMProtect-protected title against the baseline engine.
+
+Their `0000` build-fix patch is deliberately not staged: it works around the
+same SONAME_LIBVULKAN error our pipeline hit in run 7, which we solved
+properly by building against MoltenVK (Vulkan support is wanted, not
+avoided).
+
 The repo's `stage2-dwproton` set (ntoskrnl backports + dispatcher spoofs for
 ACE anti-cheat) is deliberately NOT a candidate: it is per-anti-cheat work
 with ToS exposure, and belongs to a user's own decision, not a default engine.
