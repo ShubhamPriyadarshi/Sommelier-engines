@@ -33,7 +33,10 @@ jobs:
           # The bottles are prebuilt; this is minutes, not a source build.
           NONINTERACTIVE=1 arch -x86_64 /bin/bash -c \
             "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          arch -x86_64 /usr/local/bin/brew install gnutls freetype sdl2 pkgconf
+          # molten-vk is not optional: CrossOver's win32u assumes
+          # SONAME_LIBVULKAN exists (their tree always ships MoltenVK, so they
+          # dropped upstream's #ifdef), and DXVK needs winevulkan at runtime.
+          arch -x86_64 /usr/local/bin/brew install gnutls freetype sdl2 pkgconf molten-vk
           ls -la /usr/local/bin/ | grep -i pkg || true
           ls /usr/local/lib/pkgconfig/ | head -20 || true
 
