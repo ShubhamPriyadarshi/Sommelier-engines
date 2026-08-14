@@ -34,6 +34,8 @@ jobs:
           NONINTERACTIVE=1 arch -x86_64 /bin/bash -c \
             "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           arch -x86_64 /usr/local/bin/brew install gnutls freetype sdl2 pkgconf
+          ls -la /usr/local/bin/ | grep -i pkg || true
+          ls /usr/local/lib/pkgconfig/ | head -20 || true
 
       - name: Build
         env:

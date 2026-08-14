@@ -114,9 +114,21 @@ fi
 # the arm64 one at /opt/homebrew must never leak into the link. Pinning
 # PKG_CONFIG_LIBDIR (not just PATH) is what guarantees that.
 X86_BREW="/usr/local"
-export PKG_CONFIG="$X86_BREW/bin/pkgconf"
+# The binary is `pkg-config` or `pkgconf` depending on the formula era; run 6
+# proved that guessing the name silently breaks every package whose headers
+# are not directly under include/ — gnutls passed while freetype's
+# include/freetype2/ft2build.h was invisible. Resolve whichever exists, and
+# fail loudly if neither does.
+PKG_CONFIG=""
+for candidate in "$X86_BREW/bin/pkg-config" "$X86_BREW/bin/pkgconf"; do
+    [ -x "$candidate" ] && PKG_CONFIG="$candidate" && break
+done
+[ -n "$PKG_CONFIG" ] || { echo "no x86_64 pkg-config in $X86_BREW/bin"; exit 1; }
+export PKG_CONFIG
 export PKG_CONFIG_LIBDIR="$X86_BREW/lib/pkgconfig"
-DEP_CPPFLAGS="-I$X86_BREW/include"
+# freetype2 on CPPFLAGS as well, so the build does not depend on pkg-config
+# behaving for the one library whose headers hide a directory down.
+DEP_CPPFLAGS="-I$X86_BREW/include -I$X86_BREW/include/freetype2"
 DEP_LDFLAGS="-L$X86_BREW/lib"
 
 cd "$BUILD"
