@@ -180,6 +180,7 @@ $ARCH_PREFIX "$SOURCES/wine/configure" \
     --enable-archs=i386,x86_64 \
     --without-x \
     --without-alsa --without-pulse \
+    --with-gstreamer \
     --with-freetype --with-gnutls \
     --disable-tests \
     --host=x86_64-apple-darwin \
@@ -199,4 +200,16 @@ if [ -n "$CCACHE" ]; then
     "$CCACHE" --show-stats 2>/dev/null || "$CCACHE" -s 2>/dev/null || true
 fi
 
+# Wine disables silently: a missing dependency is a warning during configure
+# and an absent feature at runtime, months later, in a game that will not play
+# its cutscene. Fail here instead, for the ones a game launcher actually needs.
+for required in gstreamer; do
+    if grep -qi "$required.*won't be supported" "$BUILD/config.log" 2>/dev/null; then
+        echo "FATAL: configure disabled $required — the dependency is missing"
+        exit 1
+    fi
+done
+
 echo "Build complete: $PREFIX"
+echo "=== features configure disabled (informational) ==="
+grep -i "won't be supported" "$BUILD/config.log" 2>/dev/null | sed 's/^/  /' || true

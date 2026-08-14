@@ -61,7 +61,15 @@ jobs:
           # molten-vk is not optional: CrossOver's win32u assumes
           # SONAME_LIBVULKAN exists (their tree always ships MoltenVK, so they
           # dropped upstream's #ifdef), and DXVK needs winevulkan at runtime.
-          arch -x86_64 /usr/local/bin/brew install gnutls freetype sdl2 pkgconf molten-vk
+          # gstreamer + gst-plugins-base close the one compatibility gap this
+          # engine has against an imported CrossOver: without them Wine builds
+          # no media backend and any game with pre-rendered cutscenes skips or
+          # hangs on video. libusb covers USB devices; ordinary controllers
+          # already work through winebus's IOHID and SDL backends, both of
+          # which configure detects.
+          arch -x86_64 /usr/local/bin/brew install \
+            gnutls freetype sdl2 pkgconf molten-vk \
+            gstreamer gst-plugins-base libusb
           # ccache comes from its own release, not brew: brew kept failing to
           # pour it (a dependency is already linked on the runner image) and
           # the failure was swallowed by a fallback, so ten runs compiled
