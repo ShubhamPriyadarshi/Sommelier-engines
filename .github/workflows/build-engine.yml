@@ -61,15 +61,35 @@ jobs:
           # molten-vk is not optional: CrossOver's win32u assumes
           # SONAME_LIBVULKAN exists (their tree always ships MoltenVK, so they
           # dropped upstream's #ifdef), and DXVK needs winevulkan at runtime.
-          # gstreamer + gst-plugins-base close the one compatibility gap this
-          # engine has against an imported CrossOver: without them Wine builds
-          # no media backend and any game with pre-rendered cutscenes skips or
-          # hangs on video. libusb covers USB devices; ordinary controllers
-          # already work through winebus's IOHID and SDL backends, both of
-          # which configure detects.
-          arch -x86_64 /usr/local/bin/brew install \
-            gnutls freetype sdl2 pkgconf molten-vk \
-            gstreamer gst-plugins-base libusb
+          # gstreamer closes the one compatibility gap this engine has against
+          # an imported CrossOver: without it Wine builds no media backend and
+          # any game with pre-rendered cutscenes skips or hangs on video.
+          # gst-plugins-base is deliberately absent — Homebrew merged it into
+          # gstreamer, so naming both asks brew to install one formula twice
+          # and the whole batch exits 1. libusb covers USB devices; ordinary
+          # controllers already work through winebus's IOHID and SDL backends.
+          #
+          # One at a time, so a link conflict on someone's dependency does not
+          # take the rest down with it — the runner image ships several of
+          # these already linked.
+          for formula in gnutls freetype sdl2 pkgconf molten-vk gstreamer libusb; do
+            arch -x86_64 /usr/local/bin/brew install "$formula" \
+              || arch -x86_64 /usr/local/bin/brew link --overwrite "$formula" \
+              || echo "::warning::$formula may be incomplete — asserted below"
+          done
+
+          # brew's exit code is not the thing that matters; whether the build
+          # can actually find these is. Assert that, and fail here rather than
+          # 50 minutes later inside configure.
+          PKGCONF=/usr/local/bin/pkgconf
+          [ -x "$PKGCONF" ] || PKGCONF=/usr/local/bin/pkg-config
+          [ -x "$PKGCONF" ] || { echo "no x86_64 pkg-config"; exit 1; }
+          export PKG_CONFIG_LIBDIR=/usr/local/lib/pkgconfig
+          for pc in gnutls freetype2 gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0; do
+            "$PKGCONF" --exists "$pc" \
+              || { echo "FATAL: $pc is not usable by the build"; exit 1; }
+            echo "  ok: $pc $("$PKGCONF" --modversion "$pc")"
+          done
           # ccache comes from its own release, not brew: brew kept failing to
           # pour it (a dependency is already linked on the runner image) and
           # the failure was swallowed by a fallback, so ten runs compiled
