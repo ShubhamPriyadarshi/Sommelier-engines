@@ -61,7 +61,13 @@ fi
 # The compilers are passed by absolute path below so PATH order cannot decide
 # which compiler builds what; PATH only serves the prefixed helper tools.
 export PATH="$(brew --prefix bison)/bin:$PATH:$WORK/$LLVM_MINGW/bin"
-CROSS_CLANG="$WORK/$LLVM_MINGW/bin/x86_64-w64-mingw32-clang"
+LLVM_BIN="$WORK/$LLVM_MINGW/bin"
+CROSS_CLANG="$LLVM_BIN/x86_64-w64-mingw32-clang"
+# Named explicitly because configure would otherwise find these by name and
+# use them unwrapped; assert they exist rather than silently falling back.
+for tool in i686-w64-mingw32-gcc x86_64-w64-mingw32-gcc; do
+    [ -x "$LLVM_BIN/$tool" ] || { echo "llvm-mingw has no $tool"; exit 1; }
+done
 [ -x "$CROSS_CLANG" ] || { echo "llvm-mingw extraction failed"; exit 1; }
 
 # The Unix side is x86_64. `arch -x86_64` alone is NOT enough: clang keys its
@@ -167,8 +173,18 @@ if [ -n "$CCACHE" ]; then
     HOST_CC="$CCACHE /usr/bin/clang -arch x86_64"
     HOST_CXX="$CCACHE /usr/bin/clang++ -arch x86_64"
     CROSS_CC="$CCACHE $CROSS_CLANG"
+    # The PE side is 97% of the build and does not go through CROSSCC.
+    # Measured: 8621 compiles, of which 4214 were i686-w64-mingw32-gcc and
+    # 4143 x86_64-w64-mingw32-gcc, against only 264 through the wrapped host
+    # compiler. Wine 11 with --enable-archs takes a compiler per architecture
+    # in `<arch>_CC`, and leaving those empty lets configure discover the cross
+    # tools by name — unwrapped, and therefore uncached.
+    PE_CC_I386="$CCACHE $LLVM_BIN/i686-w64-mingw32-gcc"
+    PE_CC_X86_64="$CCACHE $LLVM_BIN/x86_64-w64-mingw32-gcc"
 else
     echo "::warning::ccache not found — this build will not be checkpointed"
+    PE_CC_I386="$LLVM_BIN/i686-w64-mingw32-gcc"
+    PE_CC_X86_64="$LLVM_BIN/x86_64-w64-mingw32-gcc"
     HOST_CC="/usr/bin/clang -arch x86_64"
     HOST_CXX="/usr/bin/clang++ -arch x86_64"
     CROSS_CC="$CROSS_CLANG"
@@ -186,6 +202,8 @@ $ARCH_PREFIX "$SOURCES/wine/configure" \
     --host=x86_64-apple-darwin \
     CC="$HOST_CC" CXX="$HOST_CXX" \
     CROSSCC="$CROSS_CC" \
+    i386_CC="$PE_CC_I386" \
+    x86_64_CC="$PE_CC_X86_64" \
     CPPFLAGS="$DEP_CPPFLAGS" LDFLAGS="$DEP_LDFLAGS" \
     ${UNIX_CFLAGS:+CFLAGS="$UNIX_CFLAGS"} \
     ${PE_CFLAGS:+CROSSCFLAGS="$PE_CFLAGS"}
