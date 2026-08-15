@@ -34,6 +34,17 @@ that fails any line does not ship.
   recommended; CrossOver import requires a valid license; CrossOver licenses
   fund Wine development.
 
+## DXMT
+
+The bundle ships DXMT (Metal-based D3D11/D3D10, github.com/3Shain/dxmt,
+"Feifan He for CodeWeavers") fetched checksum-pinned from its upstream
+release — never copied out of a CrossOver install. Version v0.80 is
+MIT-licensed (the license text ships at `lib/dxmt/LICENSE`; releases after
+v0.80 are LGPL 2.1+ — an upgrade moves DXMT into the same
+complete-corresponding-source flow as Wine above, so re-read this section
+before bumping `DXMT_VERSION` in assemble-bundle.sh). The bundled DXVK-derived
+utility code inside DXMT is zlib/libpng-licensed.
+
 ## What is deliberately not included
 
 The proprietary parts of CrossOver are not in the source tarball and must never

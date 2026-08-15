@@ -89,6 +89,39 @@ while [ "$copied" -eq 1 ]; do
 done
 echo "Bundled $(ls "$BUNDLE/lib/external" | wc -l | tr -d ' ') external dylibs"
 
+# ---- DXMT (D3D11/D3D10 on Metal) --------------------------------------------
+# Steam's UI cannot paint without a working D3D11 backend, and only DXMT's is
+# both open source and runnable on this engine: its winemetal bridge carries a
+# self-contained unixlib ABI, so upstream builds work here unmodified
+# (verified FL 11_0). GPTK's D3D11 needs CrossOver-private dispatch and
+# crashes on this engine; wined3d GL tops out below what CEF's ANGLE needs.
+# v0.80 is the last MIT-licensed release; later versions are LGPL 2.1+ and
+# on upgrade move under the same compliance flow as Wine itself.
+# Layout mirrors CrossOver's: PE dlls stay in lib/dxmt for installers to copy
+# into a prefix's system32 (DXVK-style); winemetal's halves live where Wine
+# loads builtins from. docs/STEAM-HOSTING.md has the full recipe.
+DXMT_VERSION=v0.80
+DXMT_SHA256=8f260e36b5739e68f3bad613381441385c4dc7b85b78ba8de653d5a6a264529d
+DXMT_TAR="$WORK/downloads/dxmt-$DXMT_VERSION-builtin.tar.gz"
+mkdir -p "$WORK/downloads"
+if [ ! -f "$DXMT_TAR" ]; then
+    curl -fsSL --retry 3 -o "$DXMT_TAR" \
+        "https://github.com/3Shain/dxmt/releases/download/$DXMT_VERSION/dxmt-$DXMT_VERSION-builtin.tar.gz"
+fi
+echo "$DXMT_SHA256  $DXMT_TAR" | shasum -a 256 -c - \
+    || { echo "FATAL: dxmt tarball checksum mismatch"; exit 1; }
+DXMT_TMP="$WORK/dxmt-extract"
+rm -rf "$DXMT_TMP" && mkdir -p "$DXMT_TMP"
+tar -xzf "$DXMT_TAR" -C "$DXMT_TMP"
+mkdir -p "$BUNDLE/lib/dxmt"
+cp -R "$DXMT_TMP/$DXMT_VERSION/x86_64-windows" "$DXMT_TMP/$DXMT_VERSION/i386-windows" \
+      "$DXMT_TMP/$DXMT_VERSION/x86_64-unix" "$BUNDLE/lib/dxmt/"
+cp "$DXMT_TMP/$DXMT_VERSION/x86_64-unix/winemetal.so" "$BUNDLE/lib/wine/x86_64-unix/"
+cp "$DXMT_TMP/$DXMT_VERSION/x86_64-windows/winemetal.dll" "$BUNDLE/lib/wine/x86_64-windows/"
+cp "$DXMT_TMP/$DXMT_VERSION/i386-windows/winemetal.dll" "$BUNDLE/lib/wine/i386-windows/"
+cp "$ROOT/resources/dxmt.LICENSE" "$BUNDLE/lib/dxmt/LICENSE"
+echo "Bundled DXMT $DXMT_VERSION"
+
 mkdir -p "$BUNDLE/share/doc"
 cp "$ROOT/resources/LICENSE.LGPL-2.1" "$BUNDLE/share/doc/"
 sed -e "s/@VERSION@/$VERSION/" "$ROOT/resources/NOTICE.template" \
