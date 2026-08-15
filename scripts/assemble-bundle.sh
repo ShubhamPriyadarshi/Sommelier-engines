@@ -19,7 +19,13 @@
 # entitlement as much as bin/wine64 does.
 set -euo pipefail
 
-VERSION="${CX_VERSION:-26.3.0}"
+# Two versions, deliberately distinct. SOURCE_VERSION identifies the upstream
+# tarball this engine is built from — a provenance fact that lives in NOTICE
+# and beside the binaries as complete corresponding source. VERSION is the
+# engine's own identity and names everything user-visible; LGPL obliges
+# source correspondence and notices, never naming.
+SOURCE_VERSION="${CX_VERSION:-26.3.0}"
+VERSION="${ENGINE_VERSION:-1.0.0}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${WORK_DIR:-$ROOT/work}"
 PREFIX="$WORK/out"
@@ -124,7 +130,8 @@ echo "Bundled DXMT $DXMT_VERSION"
 
 mkdir -p "$BUNDLE/share/doc"
 cp "$ROOT/resources/LICENSE.LGPL-2.1" "$BUNDLE/share/doc/"
-sed -e "s/@VERSION@/$VERSION/" "$ROOT/resources/NOTICE.template" \
+sed -e "s/@VERSION@/$VERSION/" -e "s/@SOURCE_VERSION@/$SOURCE_VERSION/" \
+    "$ROOT/resources/NOTICE.template" \
     > "$BUNDLE/share/doc/NOTICE"
 
 # Every Mach-O that can become the game process gets the entitlement. The list

@@ -27,9 +27,14 @@ that fails any line does not ship.
 
 ## Naming and trademarks
 
-- The engine name is `WS12WineSommelier<version>` and the display name "Sommelier Wine
-  (CrossOver sources) <version>". Describing provenance is nominative use;
-  branding the product "CrossOver" is not. No CodeWeavers logos anywhere.
+- The engine carries Sommelier's own name and version: directory name
+  `WS12WineSommelier<engine version>` (the `WS12Wine` prefix is the parser
+  convention Sommelier inherits from the Wineskin lineage), display name
+  "Sommelier <engine version>". The upstream sources version appears only in
+  NOTICE, this file, and the release body — describing provenance there is
+  nominative use; putting "CrossOver" in the product's name or version is
+  not. No CodeWeavers logos anywhere. The LGPL itself imposes obligations on
+  source availability and notices, none on naming.
 - In-app credit (already in Sommelier's engines sheet): published engines are
   recommended; CrossOver import requires a valid license; CrossOver licenses
   fund Wine development.

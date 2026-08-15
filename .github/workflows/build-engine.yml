@@ -4,9 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       cx_version:
-        description: "CrossOver sources version (e.g. 26.3.0)"
+        description: "Upstream sources version to build from (e.g. 26.3.0)"
         required: true
         default: "26.3.0"
+      engine_version:
+        # The engine's own identity. LGPL compliance obliges source
+        # correspondence and notices, never naming — the upstream version
+        # stays a provenance fact inside NOTICE and the release body, while
+        # the artifact carries Sommelier's version.
+        description: "Sommelier engine version (names the bundle and release)"
+        required: true
+        default: "1.0.0"
 
 # The default workflow token is read-only, so creating a release 403s after a
 # successful hour-long build. Scoped to contents rather than write-all.
@@ -180,6 +188,7 @@ jobs:
       - name: Assemble bundle
         env:
           CX_VERSION: ${{ inputs.cx_version }}
+          ENGINE_VERSION: ${{ inputs.engine_version }}
         run: ./scripts/assemble-bundle.sh
 
       - name: Save downloads cache
@@ -210,10 +219,10 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: WS12WineSommelier${{ inputs.cx_version }}
+          tag_name: WS12WineSommelier${{ inputs.engine_version }}
           draft: true   # verified on a real machine before publishing — see README
           files: |
-            work/WS12WineSommelier${{ inputs.cx_version }}.tar.xz
-            work/sommelier-engine-patches-${{ inputs.cx_version }}.tar.gz
+            work/WS12WineSommelier${{ inputs.engine_version }}.tar.xz
+            work/sommelier-engine-patches-${{ inputs.engine_version }}.tar.gz
             work/crossover-sources-${{ inputs.cx_version }}.tar.gz
           body_path: work/source-sha256.txt
