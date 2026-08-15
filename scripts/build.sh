@@ -109,7 +109,16 @@ if [ "$(uname -m)" = "arm64" ]; then ARCH_PREFIX="arch -x86_64"; fi
 # side uses feature flags instead. The PE side keeps the level name: llvm-mingw
 # IS upstream clang and accepts it.
 if [ "${OPTIMIZE:-1}" = "1" ]; then
-    UNIX_CFLAGS="-O3 -g0 -msse4.2 -mpopcnt"
+    # Was "-O3 -g0 -msse4.2 -mpopcnt". Bisected 2026-08-15: with everything
+    # else held constant (same prefix, same Steam copy, same webhelper
+    # wrapper), Steam's CEF windows paint on CrossOver's official binary and
+    # render black on ours, and GPTK's D3D11 device creation execute-faults
+    # on ours while working there. Both defects live in our unix-side build.
+    # The aggressive flags are the one deliberate difference from a stock
+    # build — drop to -O2 baseline to test that hypothesis. If this run
+    # fixes Steam paint / GPTK D3D11, re-raise flags selectively, never on
+    # winemac/win32u.
+    UNIX_CFLAGS="-O2 -g0"
     PE_CFLAGS="-O2 -g0 -march=x86-64-v2"
 else
     UNIX_CFLAGS=""
