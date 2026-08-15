@@ -1,10 +1,9 @@
 # Hosting the Steam client on the Sommelier engine
 
-Status 2026-08-15: the client boots, paints its UI, and renders a live
-sign-in form (animating QR) on the self-built engine. A PE compiler regression
-still blocks login in the published artifact; the candidate correction is
-awaiting a complete artifact test — see "CM connection stall" at the end.
-Direct-launch games never needed any of this.
+Status 2026-08-15: engine 1.0.2 boots the client, paints its UI, fetches the
+CM directory, completes a WebSocket connection, and logs on. The PE compiler
+regression in 1.0.0/1.0.1 is fixed; the 1.0.2 release stays draft only until
+the real-game regression gate. Direct-launch games never needed any of this.
 
 ## Why Steam was black
 
@@ -58,7 +57,7 @@ pre-login equivalent.
   bug (community-documented); `--single-process` sidesteps it but degrades
   the network service. With DXMT installed the trio suffices.
 
-## CM connection stall: localized to the PE compiler boundary
+## CM connection stall: fixed in 1.0.2
 
 steamclient's `CCMInterface::YieldingConnect` coroutine never runs on this
 engine — "EConnect called - scheduling connection for 50ms" repeats
@@ -82,7 +81,14 @@ complete a WebSocket connection in about 15 seconds. Both DLLs expose the same
 with llvm-mingw/Clang. This also explains why `OPTIMIZE=0` did not change the
 failure: it changed flags, not compiler families.
 
-The current candidate builds every PE module with Homebrew MinGW GCC and keeps
-the Unix side on Apple Clang. It is not a verified fix until a complete clean
-artifact connects from a fresh scratch prefix. Do not mix `ntdll.so` across
-builds when bisecting — Unix and PE ntdll are a matched pair.
+Engine 1.0.2 builds every PE module with Homebrew MinGW GCC 16.1 and keeps the
+Unix side on Apple Clang. The untouched CI artifact passed through Sommelier's
+actual `WineRunner`, shared-client link and wrapper install path: its prefix
+loaded the artifact's own `kernelbase.dll`, entered `YieldingConnect`, fetched
+the CM list, and logged `ConnectionCompleted()` over WebSocket. It was then
+installed through `EngineInstaller`, whose installed DLL hash matched the
+tested artifact. This verifies the compiler-family correction; no CrossOver
+DLL is present in 1.0.2.
+
+Do not mix `ntdll.so` across builds when bisecting — Unix and PE ntdll are a
+matched pair.

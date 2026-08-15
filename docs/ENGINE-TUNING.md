@@ -220,10 +220,12 @@ clock probes all passed, so this looked like a Unix scheduler failure.
 A binary boundary bisect proved otherwise: substituting only CrossOver 26.3's
 `kernelbase.dll` made the unchanged Sommelier engine fetch and connect to the
 CM list immediately. That DLL identifies its compiler as GCC 13.2; ours was
-Clang-built. The build now uses MinGW GCC for all PE modules and keeps their
-flags at `-O2 -g0` while this correction is verified. Do not reintroduce
-`-march=x86-64-v2` without an actual Steam CM A/B—the earlier primitive probes
-were not sufficient to catch this class of code-generation failure.
+Clang-built. Engine 1.0.2 now uses MinGW GCC 16.1 for all PE modules and keeps
+their flags at `-O2 -g0`; its untouched CI artifact passed the real Steam CM
+test (`YieldingConnect`, CM list fetch, then WebSocket `ConnectionCompleted`).
+Do not reintroduce `-march=x86-64-v2` without another Steam CM A/B—the earlier
+primitive probes were not sufficient to catch this class of code-generation
+failure.
 
 ---
 
