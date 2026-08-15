@@ -41,6 +41,13 @@
 
 int wmain(void)
 {
+    // Console subsystem, because the -mwindows/wWinMain build silently failed
+    // to spawn its child under Wine — but Wine gives a console app a real
+    // console window, and Steam's helper is meant to be invisible. Hide it
+    // immediately rather than leaving a stray conhost window over the game.
+    HWND console = GetConsoleWindow();
+    if (console) ShowWindow(console, SW_HIDE);
+
     WCHAR self[MAX_PATH];
     GetModuleFileNameW(NULL, self, MAX_PATH);
     WCHAR *slash = wcsrchr(self, L'\\');
