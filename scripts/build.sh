@@ -4,12 +4,11 @@
 # Shape of the build (CrossOver 26 / Wine 11, new WOW64):
 #   - ONE Unix-side build, x86_64 (runs under Rosetta on Apple Silicon; an
 #     arm64ec build is a later phase once CrossOver 27's approach is public)
-#   - PE modules cross-compiled for x86_64 and i386 with llvm-mingw
+#   - PE modules cross-compiled for x86_64 and i386 with MinGW GCC
 #
-# STATUS: scaffold. Every flag below is the known-good shape from public
-# CrossOver-source pipelines (Gcenx/winecx, GabLeRoux's cloud builder), but this
-# script has not yet survived CI end to end. Iterate here; keep the flags and
-# the reasons in comments as they settle.
+# This pipeline has produced installable, real-machine-tested engines. Keep the
+# reasons beside non-obvious flags: build-system changes here can surface much
+# later as Windows runtime failures rather than configure or compile errors.
 set -euo pipefail
 
 VERSION="${CX_VERSION:-26.3.0}"
@@ -42,33 +41,21 @@ for patch in "$ROOT"/patches/*.patch; do
 done
 
 # ---- 2. Toolchain ----------------------------------------------------------
-# llvm-mingw supplies the PE cross-compilers. It is not a Homebrew formula
-# (verified: the first CI run died on exactly that), so fetch the official
-# macOS-universal release instead — pinned, because a floating "latest" makes
-# builds unreproducible and the toolchain is part of the corresponding source
-# story. bison comes from brew; macOS's own is too old for Wine.
-LLVM_MINGW_VERSION="20260616"
-LLVM_MINGW="llvm-mingw-$LLVM_MINGW_VERSION-ucrt-macos-universal"
-if [ ! -d "$WORK/$LLVM_MINGW" ]; then
-    curl -fL -o "$WORK/$LLVM_MINGW.tar.xz" \
-        "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_VERSION/$LLVM_MINGW.tar.xz"
-    tar -xf "$WORK/$LLVM_MINGW.tar.xz" -C "$WORK"
-fi
-# llvm-mingw goes at the END of PATH and never the front: it ships a bare
-# `clang` beside its prefixed cross tools, and at the front it shadowed Apple's
-# clang — configure then died on `ld: library 'System' not found`, upstream
-# clang having no macOS SDK default. That one line was runs 2-4's only failure.
-# The compilers are passed by absolute path below so PATH order cannot decide
-# which compiler builds what; PATH only serves the prefixed helper tools.
-export PATH="$(brew --prefix bison)/bin:$PATH:$WORK/$LLVM_MINGW/bin"
-LLVM_BIN="$WORK/$LLVM_MINGW/bin"
-CROSS_CLANG="$LLVM_BIN/x86_64-w64-mingw32-clang"
+# CodeWeavers' working 26.3 kernelbase identifies itself as GCC 13.2. Our
+# llvm-mingw/Clang build exported the same API and passed focused sync, clock
+# and fiber probes, but Steam's CM coroutine never advanced. Substituting only
+# CodeWeavers' GCC-built kernelbase into an otherwise unchanged Sommelier
+# engine fixed the connection immediately. Use the same compiler family for
+# every PE module; the host/Unix side remains Apple clang.
+MINGW_PREFIX="${MINGW_PREFIX:-$(brew --prefix mingw-w64)}"
+MINGW_BIN="$MINGW_PREFIX/bin"
+export PATH="$(brew --prefix bison)/bin:$PATH:$MINGW_BIN"
 # Named explicitly because configure would otherwise find these by name and
 # use them unwrapped; assert they exist rather than silently falling back.
 for tool in i686-w64-mingw32-gcc x86_64-w64-mingw32-gcc; do
-    [ -x "$LLVM_BIN/$tool" ] || { echo "llvm-mingw has no $tool"; exit 1; }
+    [ -x "$MINGW_BIN/$tool" ] || { echo "MinGW GCC has no $tool"; exit 1; }
 done
-[ -x "$CROSS_CLANG" ] || { echo "llvm-mingw extraction failed"; exit 1; }
+CROSS_GCC="$MINGW_BIN/x86_64-w64-mingw32-gcc"
 
 # The Unix side is x86_64. `arch -x86_64` alone is NOT enough: clang keys its
 # default target off more than the process architecture — verified locally,
@@ -95,19 +82,10 @@ if [ "$(uname -m)" = "arm64" ]; then ARCH_PREFIX="arch -x86_64"; fi
 #   -O2 on the PE side         the builtin DLLs; kept a notch conservative
 #                              because a miscompiled d3d/ntdll PE is the
 #                              hardest failure in this stack to diagnose.
-#   -march=x86-64-v2           SSE4.2/POPCNT everywhere. Rosetta translates v2
-#                              cleanly on every macOS this can run on. v3 (AVX2)
-#                              is deliberately NOT used: Rosetta only gained
-#                              AVX2 recently and a v3 engine would crash on
-#                              older systems for a gain Wine itself barely sees.
 #   -g0                        no debug info; smaller bundle, faster cold load.
 #
 # OPTIMIZE=0 rebuilds with Wine's own defaults, for bisecting a suspected
 # flag-induced miscompile before blaming the source.
-# Apple clang rejects -march=x86-64-v2 (the microarch level names are
-# upstream-LLVM only; verified locally, it fails in one second) — the Unix
-# side uses feature flags instead. The PE side keeps the level name: llvm-mingw
-# IS upstream clang and accepts it.
 if [ "${OPTIMIZE:-1}" = "1" ]; then
     # Was "-O3 -g0 -msse4.2 -mpopcnt". Bisected 2026-08-15: with everything
     # else held constant (same prefix, same Steam copy, same webhelper
@@ -119,7 +97,9 @@ if [ "${OPTIMIZE:-1}" = "1" ]; then
     # fixes Steam paint / GPTK D3D11, re-raise flags selectively, never on
     # winemac/win32u.
     UNIX_CFLAGS="-O2 -g0"
-    PE_CFLAGS="-O2 -g0 -march=x86-64-v2"
+    # Hold the PE side to CodeWeavers' conservative baseline until Steam's CM
+    # regression is verified fixed in a complete GCC-built artifact.
+    PE_CFLAGS="-O2 -g0"
 else
     UNIX_CFLAGS=""
     PE_CFLAGS=""
@@ -223,22 +203,22 @@ if [ -n "$CCACHE" ]; then
     export CCACHE_COMPILERCHECK=content
     HOST_CC="$CCACHE /usr/bin/clang -arch x86_64"
     HOST_CXX="$CCACHE /usr/bin/clang++ -arch x86_64"
-    CROSS_CC="$CCACHE $CROSS_CLANG"
+    CROSS_CC="$CCACHE $CROSS_GCC"
     # The PE side is 97% of the build and does not go through CROSSCC.
     # Measured: 8621 compiles, of which 4214 were i686-w64-mingw32-gcc and
     # 4143 x86_64-w64-mingw32-gcc, against only 264 through the wrapped host
     # compiler. Wine 11 with --enable-archs takes a compiler per architecture
     # in `<arch>_CC`, and leaving those empty lets configure discover the cross
     # tools by name — unwrapped, and therefore uncached.
-    PE_CC_I386="$CCACHE $LLVM_BIN/i686-w64-mingw32-gcc"
-    PE_CC_X86_64="$CCACHE $LLVM_BIN/x86_64-w64-mingw32-gcc"
+    PE_CC_I386="$CCACHE $MINGW_BIN/i686-w64-mingw32-gcc"
+    PE_CC_X86_64="$CCACHE $MINGW_BIN/x86_64-w64-mingw32-gcc"
 else
     echo "::warning::ccache not found — this build will not be checkpointed"
-    PE_CC_I386="$LLVM_BIN/i686-w64-mingw32-gcc"
-    PE_CC_X86_64="$LLVM_BIN/x86_64-w64-mingw32-gcc"
+    PE_CC_I386="$MINGW_BIN/i686-w64-mingw32-gcc"
+    PE_CC_X86_64="$MINGW_BIN/x86_64-w64-mingw32-gcc"
     HOST_CC="/usr/bin/clang -arch x86_64"
     HOST_CXX="/usr/bin/clang++ -arch x86_64"
-    CROSS_CC="$CROSS_CLANG"
+    CROSS_CC="$CROSS_GCC"
 fi
 
 cd "$BUILD"

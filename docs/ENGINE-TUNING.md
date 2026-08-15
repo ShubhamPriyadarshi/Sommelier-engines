@@ -210,12 +210,20 @@ becomes the interesting backend here:
 Untested. Only worth pursuing for a DXVK/VKD3D title, since D3DMetal does not
 go through Vulkan at all.
 
-### Optimization flags are unproven
-`-O3 -g0 -msse4.2 -mpopcnt` (Unix side), `-O2 -march=x86-64-v2` (PE side).
-Reasonable bets, **not measured** against a stock build. `OPTIMIZE=0` restores
-Wine's defaults so a suspected miscompile can be bisected in one rebuild. AVX2
-(`x86-64-v3`) is deliberately excluded: Rosetta only gained it recently and a v3
-engine would crash on older systems for a gain Wine barely sees.
+### PE compiler choice is runtime behavior, not just build machinery
+
+The first engines used llvm-mingw/Clang for the PE side. Steam painted but its
+CM coroutine repeatedly scheduled a 50 ms connection and never entered
+`YieldingConnect`. Focused condition-variable, address-wait, fiber/FLS and
+clock probes all passed, so this looked like a Unix scheduler failure.
+
+A binary boundary bisect proved otherwise: substituting only CrossOver 26.3's
+`kernelbase.dll` made the unchanged Sommelier engine fetch and connect to the
+CM list immediately. That DLL identifies its compiler as GCC 13.2; ours was
+Clang-built. The build now uses MinGW GCC for all PE modules and keeps their
+flags at `-O2 -g0` while this correction is verified. Do not reintroduce
+`-march=x86-64-v2` without an actual Steam CM A/B—the earlier primitive probes
+were not sufficient to catch this class of code-generation failure.
 
 ---
 

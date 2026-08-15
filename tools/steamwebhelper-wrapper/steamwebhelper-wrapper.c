@@ -65,8 +65,9 @@ int wmain(void)
     lstrcatW(cmd, L"steamwebhelper_real.exe\" --no-sandbox --in-process-gpu --disable-gpu ");
     lstrcatW(cmd, orig);
 
-    STARTUPINFOW si = { sizeof(si) };
+    STARTUPINFOW si = {0};
     PROCESS_INFORMATION pi;
+    si.cb = sizeof(si);
     if (!CreateProcessW(NULL, cmd, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi))
         return 127;
     WaitForSingleObject(pi.hProcess, INFINITE);

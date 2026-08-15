@@ -31,10 +31,11 @@ origin of an engine is never ambiguous.
 
 ## Status
 
-Scaffold. `build.sh` encodes the known shape of a CrossOver-source macOS build
-(new-WOW64: one x86_64 Unix binary, PE DLLs for x86_64 and i386 via llvm-mingw)
-but has **not** yet survived CI — expect the first week to be configure-flag
-iteration. Reference pipelines to crib from when a step fights back:
+The CI pipeline produces installable, LGPL-compliant macOS engines from
+CodeWeavers' published sources (new-WOW64: one x86_64 Unix binary, PE DLLs for
+x86_64 and i386 via MinGW GCC). Draft releases remain unpublished until the
+artifact passes the real-machine gate below. Reference pipelines used while
+bringing the build up:
 
 - https://github.com/Gcenx/winecx (the source tree, mirrored, with build hints)
 - https://github.com/GabLeRoux/macos-crossover-wine-cloud-builder (Actions workflow)

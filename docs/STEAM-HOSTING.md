@@ -1,9 +1,10 @@
 # Hosting the Steam client on the Sommelier engine
 
 Status 2026-08-15: the client boots, paints its UI, and renders a live
-sign-in form (animating QR) on the self-built engine. One bug still blocks
-login — see "Open bug" at the end. Direct-launch games never needed any of
-this.
+sign-in form (animating QR) on the self-built engine. A PE compiler regression
+still blocks login in the published artifact; the candidate correction is
+awaiting a complete artifact test — see "CM connection stall" at the end.
+Direct-launch games never needed any of this.
 
 ## Why Steam was black
 
@@ -57,7 +58,7 @@ pre-login equivalent.
   bug (community-documented); `--single-process` sidesteps it but degrades
   the network service. With DXMT installed the trio suffices.
 
-## Open bug: CM connection stall
+## CM connection stall: localized to the PE compiler boundary
 
 steamclient's `CCMInterface::YieldingConnect` coroutine never runs on this
 engine — "EConnect called - scheduling connection for 50ms" repeats
@@ -66,8 +67,22 @@ zero errors. The identical Steam install and prefix on the CrossOver engine
 fetches the CM list immediately. Eliminated: msync (off makes no
 difference), TLS (a winhttp/SChannel probe fetches the CM directory over
 HTTPS fine on this engine), sockets/DNS (Steam's own connectivity tests
-pass), CEF process mode, steam.cfg. Do not mix ntdll.so across builds when
-bisecting — unix and PE ntdll are a matched pair; winemac.so and win32u.so
-swapped cleanly. Next leads: WINEDEBUG sync/timer tracing around the 50ms
-scheduler, Steam console CM verbosity, CROSSOVER-conditional scheduler code
-in the source tree, and steam's `-tcp` flag.
+pass), CEF process mode, steam.cfg, background throttling, and the macOS
+driver modules. Focused native probes cover condition-variable timeouts and
+wakes, `WaitOnAddress`, fiber/FLS isolation, timed waits from a fiber, and
+QPC/tick/file-time coherence; all pass on both engines. Full
+`WINEDEBUG=+sync,+timer,+process` traces likewise exercise the same server wait
+machinery on both.
+
+The decisive boundary bisect was `kernelbase.dll`: substituting only
+CrossOver 26.3's copy into an isolated Sommelier 1.0.1 engine makes the
+unchanged Steam client enter `YieldingConnect`, fetch roughly 200 CMs, and
+complete a WebSocket connection in about 15 seconds. Both DLLs expose the same
+1,427 exports, but CrossOver's identifies GCC 13.2 while Sommelier's was built
+with llvm-mingw/Clang. This also explains why `OPTIMIZE=0` did not change the
+failure: it changed flags, not compiler families.
+
+The current candidate builds every PE module with Homebrew MinGW GCC and keeps
+the Unix side on Apple Clang. It is not a verified fix until a complete clean
+artifact connects from a fresh scratch prefix. Do not mix `ntdll.so` across
+builds when bisecting — Unix and PE ntdll are a matched pair.

@@ -34,15 +34,14 @@ jobs:
       # identical work to reach its failure point. Two caches fix that, and
       # both are saved with `if: always()` — the default save-on-success is
       # useless here, since failing runs are exactly the ones we resume from.
-      #   downloads: source tarball + llvm-mingw, keyed on version (static)
+      #   downloads: source tarball, keyed on version (static)
       #   ccache:    object-level compile cache, rolling key
       - name: Restore downloads cache
         uses: actions/cache/restore@v4
         with:
           path: |
             work/crossover-sources-*.tar.gz
-            work/llvm-mingw-*
-          key: downloads-${{ inputs.cx_version }}-llvm20260616
+          key: downloads-${{ inputs.cx_version }}
       - name: Restore ccache
         uses: actions/cache/restore@v4
         with:
@@ -52,14 +51,15 @@ jobs:
 
       - name: Toolchain
         run: |
-          # llvm-mingw is fetched by build.sh from its own releases; brew
-          # covers the rest. No `|| true`: a missing dep should fail HERE.
+          # MinGW GCC builds the PE side, matching CodeWeavers' working
+          # kernelbase toolchain family. No `|| true`: a missing dependency
+          # should fail HERE.
           # Needs root on the runners, and a swallowed failure here surfaced
           # as "C compiler cannot create executables" an hour later: the Unix
           # side configures under `arch -x86_64`, which is Rosetta.
           sudo softwareupdate --install-rosetta --agree-to-license
           # bison runs natively at build time: arm64 brew is fine for it.
-          brew install bison
+          brew install bison mingw-w64
           # The link-time dependencies must be x86_64 — run 5 proved the arm64
           # ones fail with "libgnutls 64-bit development files not found" — so
           # they come from a second Homebrew under Rosetta at /usr/local.
@@ -168,7 +168,7 @@ jobs:
           # pour it (a dependency is already linked on the runner image) and
           # the failure was swallowed by a fallback, so ten runs compiled
           # uncached while the logs claimed checkpointing was in place.
-          # Pinned, like llvm-mingw, so builds stay reproducible.
+          # Pinned so builds stay reproducible.
           CCACHE_VERSION=4.13.6
           curl -fL -o /tmp/ccache.tar.gz \
             "https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION-darwin.tar.gz"
@@ -197,8 +197,7 @@ jobs:
         with:
           path: |
             work/crossover-sources-*.tar.gz
-            work/llvm-mingw-*
-          key: downloads-${{ inputs.cx_version }}-llvm20260616
+          key: downloads-${{ inputs.cx_version }}
       - name: Save ccache
         if: always()
         uses: actions/cache/save@v4

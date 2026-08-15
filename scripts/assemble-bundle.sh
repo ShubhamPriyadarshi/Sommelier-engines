@@ -140,17 +140,18 @@ echo "Bundled DXMT $DXMT_VERSION"
 # Sommelier installs it into a Steam directory when it hosts the client.
 # Built here because this is where the PE cross-compiler already lives; the
 # source and its install rules are in tools/steamwebhelper-wrapper/.
-MINGW_BIN="$WORK/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang"
-if [ -x "$MINGW_BIN" ]; then
+MINGW_PREFIX="${MINGW_PREFIX:-$(brew --prefix mingw-w64)}"
+MINGW_CC="$MINGW_PREFIX/bin/x86_64-w64-mingw32-gcc"
+if [ -x "$MINGW_CC" ]; then
     mkdir -p "$BUNDLE/lib/sommelier"
-    "$MINGW_BIN" -municode -O2 -Wall \
+    "$MINGW_CC" -municode -O2 -Wall \
         "$ROOT/tools/steamwebhelper-wrapper/steamwebhelper-wrapper.c" \
         -o "$BUNDLE/lib/sommelier/steamwebhelper-wrapper.exe" \
         -Wl,-subsystem,console \
         || { echo "FATAL: steamwebhelper wrapper failed to build"; exit 1; }
     echo "Built steamwebhelper wrapper ($(stat -f%z "$BUNDLE/lib/sommelier/steamwebhelper-wrapper.exe") bytes)"
 else
-    echo "FATAL: no PE cross-compiler at $MINGW_BIN"; exit 1
+    echo "FATAL: no PE cross-compiler at $MINGW_CC"; exit 1
 fi
 
 mkdir -p "$BUNDLE/share/doc"
