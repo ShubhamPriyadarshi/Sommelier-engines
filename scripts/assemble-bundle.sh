@@ -122,6 +122,10 @@ tar -xzf "$DXMT_TAR" -C "$DXMT_TMP"
 mkdir -p "$BUNDLE/lib/dxmt"
 cp -R "$DXMT_TMP/$DXMT_VERSION/x86_64-windows" "$DXMT_TMP/$DXMT_VERSION/i386-windows" \
       "$DXMT_TMP/$DXMT_VERSION/x86_64-unix" "$BUNDLE/lib/dxmt/"
+# winemetal is DXMT's Unix-call bridge and belongs with Wine's own builtins
+# in every build. The d3d11/dxgi/d3d10core modules stay in lib/dxmt: the app
+# deploys them per bottle when DXMT is the selected renderer, since they
+# displace wined3d's for every title on the engine.
 cp "$DXMT_TMP/$DXMT_VERSION/x86_64-unix/winemetal.so" "$BUNDLE/lib/wine/x86_64-unix/"
 cp "$DXMT_TMP/$DXMT_VERSION/x86_64-windows/winemetal.dll" "$BUNDLE/lib/wine/x86_64-windows/"
 cp "$DXMT_TMP/$DXMT_VERSION/i386-windows/winemetal.dll" "$BUNDLE/lib/wine/i386-windows/"
