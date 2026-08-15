@@ -132,6 +132,27 @@ cp "$DXMT_TMP/$DXMT_VERSION/i386-windows/winemetal.dll" "$BUNDLE/lib/wine/i386-w
 cp "$ROOT/resources/dxmt.LICENSE" "$BUNDLE/lib/dxmt/LICENSE"
 echo "Bundled DXMT $DXMT_VERSION"
 
+# ---- Steam webhelper wrapper -------------------------------------------------
+# Steam's UI composer asks for cross-process swapchains, which DXMT declines
+# ("CreateSwapChain: cross-process swapchain not supported yet") — so a client
+# left to itself never finishes starting on this engine. The wrapper forces
+# CEF's flags to the combination CrossOver's client uses in production, and
+# Sommelier installs it into a Steam directory when it hosts the client.
+# Built here because this is where the PE cross-compiler already lives; the
+# source and its install rules are in tools/steamwebhelper-wrapper/.
+MINGW_BIN="$WORK/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang"
+if [ -x "$MINGW_BIN" ]; then
+    mkdir -p "$BUNDLE/lib/sommelier"
+    "$MINGW_BIN" -municode -O2 -Wall \
+        "$ROOT/tools/steamwebhelper-wrapper/steamwebhelper-wrapper.c" \
+        -o "$BUNDLE/lib/sommelier/steamwebhelper-wrapper.exe" \
+        -Wl,-subsystem,console \
+        || { echo "FATAL: steamwebhelper wrapper failed to build"; exit 1; }
+    echo "Built steamwebhelper wrapper ($(stat -f%z "$BUNDLE/lib/sommelier/steamwebhelper-wrapper.exe") bytes)"
+else
+    echo "FATAL: no PE cross-compiler at $MINGW_BIN"; exit 1
+fi
+
 mkdir -p "$BUNDLE/share/doc"
 cp "$ROOT/resources/LICENSE.LGPL-2.1" "$BUNDLE/share/doc/"
 sed -e "s/@VERSION@/$VERSION/" -e "s/@SOURCE_VERSION@/$SOURCE_VERSION/" \
