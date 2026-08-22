@@ -1,0 +1,82 @@
+ntdll: Stop delivering threadpool I/O callbacks after CloseThreadpoolIo.
+
+Windows does not invoke callbacks for I/O that completes after
+CloseThreadpoolIo returns. .NET's PipeStream relies on this: disposing a
+NamedPipeServerStream calls CloseThreadpoolIo while ConnectNamedPipe is
+still pending, then frees the callback state; the completion arrives when
+the handle is closed a moment later. Wine queued a callback for that
+completion into the freed state, crashing the Mono/.NET runtime ("Got a
+UNKNOWN while executing native code"), and could abort on ntdll's own
+threadpool asserts. Seen with Elin's ModdingKit console (any BepInEx/
+.NET game using named pipes); reproduced with a 2000-round native repro
+that measured 422 post-close callback deliveries before this change and
+none after.
+
+Convert still-pending operations to skipped ones at close time, exactly
+as TpCancelAsyncIoOperation does, so the completion thread drains their
+packets. Handle the race where a packet has already passed the shutdown
+test by draining the skipped count from the delivery path as well.
+
+--- a/dlls/ntdll/threadpool.c
++++ b/dlls/ntdll/threadpool.c
+@@ -1569,14 +1569,7 @@
+             if (skip) continue;
+         }
+ 
+-        if (destroy)
+-        {
+-            --ioqueue.objcount;
+-            TRACE( "Releasing io %p.\n", io );
+-            io->shutdown = TRUE;
+-            tp_object_release( io );
+-        }
+-        else if (io)
++        if (!destroy && io)
+         {
+             RtlEnterCriticalSection( &io->pool->cs );
+ 
+@@ -1598,10 +1591,27 @@
+                 completion->cvalue = value;
+ 
+                 tp_object_submit( io, FALSE );
++            }
++            else if (io->u.io.shutting_down && io->u.io.skipped_count)
++            {
++                /* TpReleaseIoCompletion converted this operation to a skipped
++                 * one after the shutdown test above ran; account its packet
++                 * here so the object still drains and gets destroyed. */
++                --io->u.io.skipped_count;
++                if (!io->u.io.skipped_count)
++                    destroy = TRUE;
+             }
+             RtlLeaveCriticalSection( &io->pool->cs );
+         }
+ 
++        if (destroy)
++        {
++            --ioqueue.objcount;
++            TRACE( "Releasing io %p.\n", io );
++            io->shutdown = TRUE;
++            tp_object_release( io );
++        }
++
+         if (!ioqueue.objcount)
+         {
+             /* All I/O objects have been destroyed; if no new objects are
+@@ -2880,7 +2890,15 @@
+ 
+     RtlEnterCriticalSection( &this->pool->cs );
+     this->u.io.shutting_down = TRUE;
+-    can_destroy = !this->u.io.pending_count && !this->u.io.skipped_count;
++    /* Windows does not invoke callbacks for I/O that completes after
++     * CloseThreadpoolIo returns; .NET's PipeStream relies on that when it
++     * closes the threadpool binding while a connect is still pending, then
++     * frees the callback state. Convert the pending operations into skipped
++     * ones so the completion thread drains their packets instead of queueing
++     * callbacks into freed user state. */
++    this->u.io.skipped_count += this->u.io.pending_count;
++    this->u.io.pending_count = 0;
++    can_destroy = !this->u.io.skipped_count;
+     RtlLeaveCriticalSection( &this->pool->cs );
+ 
+     if (can_destroy)
